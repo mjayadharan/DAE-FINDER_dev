@@ -8,6 +8,7 @@ import pandas as pd
 import numpy as np
 import warnings
 import operator
+from copy import deepcopy
 
 from scipy.integrate import odeint
 import matplotlib.pyplot as plt
@@ -99,6 +100,28 @@ def plotToy_MM(solT, sol, title =""):
     plt.grid()
     plt.show()
     return
+
+def add_noise_to_df(data_df, noise_perc, make_copy=True,
+                    random_seed = None, method= "std"):
+    """
+    data_df: pandas df with columns representing features.
+    Add noise to each feature column in the data matrix using a Gaussian distribution with mean zero and standard deviation equal to
+    noise_percentage/100 * std of the feature.
+    """
+
+    if random_seed:
+        np.random.seed(random_seed)
+    if make_copy:
+        data_df_new = deepcopy(data_df)
+    else:
+        data_df_new = data_df
+    if method == "std":
+        std_features = data_df_new.std()
+        for feature in data_df_new:
+            noise_level = std_features[feature] * noise_perc/100
+            data_df_new[feature] += np.random.normal(loc=0.0, scale=noise_level, size=data_df_new[feature].shape)
+
+    return data_df_new
 
 
 """
@@ -198,9 +221,13 @@ prebuilt. Option to pass custom metric object. Can be extended to include other 
              one feature from the candidate library.
         scale_columns -> divide the columns by std to get a unit variance for columns.
         """
+        if self.fit_intercept:
+            assert "1" not in X, ("Constant column should not be part of the data set if fit_intercept "
+                                  "is set to True")
         self.is_fit = True
         r_2_dict_unsorted = {}
         self.__fitted_models = {}
+        self.__fitted_model_intercepts = {}
         self.r2_score_dict = {}
         if scale_columns:
             s_scaler = StandardScaler(with_std=scale_columns, with_mean=center_mean)
@@ -219,6 +246,7 @@ prebuilt. Option to pass custom metric object. Can be extended to include other 
         for feature in X_scaled:
             self.model.fit(X=X_scaled.drop([feature], axis=1), y=X_scaled[feature])
             self.__fitted_models[feature] = dict(zip(self.model.feature_names_in_, self.model.coef_))
+            self.__fitted_model_intercepts[feature] = self.model.intercept_
             self.model.score(X=X_scaled.drop([feature], axis=1),
                                                           y=X_scaled[feature])
             r_2_dict_unsorted[feature] = self.model.score(X=X_scaled.drop([feature], axis=1),
@@ -281,6 +309,19 @@ prebuilt. Option to pass custom metric object. Can be extended to include other 
         else:
             return self.__fitted_models
 
+    def get_fitted_intercepts(self, scale_coef=True):
+        """
+        for column scaled data matrix, the intercept is also scaled as std_of_lhs * intercept
+        """
+        assert self.is_fit, "Models need to be fit to data first"
+        if scale_coef and self.column_scaled:
+            unscaled_intercepts = self.__fitted_model_intercepts
+            scaled_fitted_model_intercepts = { lib_term: intercept_ * (self.column_scales[lib_term])
+                for lib_term, intercept_ in unscaled_intercepts.items()}
+            return scaled_fitted_model_intercepts
+        else:
+            return self.__fitted_model_intercepts
+
     def predict_features(self, X_test, feature_list, scale_coef=True):
         """
         Function to predict the value of each feature in feature_list, where each feature is a
@@ -295,6 +336,7 @@ prebuilt. Option to pass custom metric object. Can be extended to include other 
         assert set(feature_list) <= set(self.__fitted_models.keys()), ("Feature list should be a subset"
                                                                        " of features initially fitted")
         fitted_models = self.get_fitted_models(scale_coef=scale_coef)
+        fitted_intercepts = self.get_fitted_intercepts()
         prediction_df = pd.DataFrame(columns=feature_list)
         for feature in feature_list:
             coef_features = fitted_models[feature]
@@ -302,7 +344,7 @@ prebuilt. Option to pass custom metric object. Can be extended to include other 
                 "Data matrix X_test doesnot have all the feature columns"
                 "required for fitting feature {}".format(feature))
             prediction_df[feature] = sum(coef_value * X_test[coef_feat] for coef_feat,
-            coef_value in coef_features.items())
+            coef_value in coef_features.items()) + fitted_intercepts[feature]
 
         return prediction_df
 
@@ -399,9 +441,11 @@ class sequentialThLin(MultiOutputMixin, RegressorMixin):
 
         self.coef_history_df = pd.DataFrame()
         self.coef_history_df_pre_thesh = pd.DataFrame()
+        self.intercept_history_df = pd.DataFrame()
 
         self.coef_ = None
         self.feature_names_in_ = None
+        self.intercept_ = 0.0
 
     def fit(self, X, y=None, solver="auto"):
 
@@ -410,6 +454,7 @@ class sequentialThLin(MultiOutputMixin, RegressorMixin):
         self.is_fit = True
         self.coef_history_df = pd.DataFrame(columns=X.columns)
         self.coef_history_df_pre_thesh = pd.DataFrame(columns=X.columns)
+        self.intercept_history_df = pd.DataFrame(columns=["1"])
 
         # old_sparse_index = [False] * num_features
         non_sparse_columns = X.columns
@@ -422,6 +467,7 @@ class sequentialThLin(MultiOutputMixin, RegressorMixin):
             sparse_index = abs(coef_ind) < self.coef_threshold
             coef_ind[sparse_index] = 0.0
             self.coef_history_df.loc[ind] = dict(zip(self.model.feature_names_in_, coef_ind))
+            self.intercept_history_df.loc[ind]= {"1": self.model.intercept_}
 
             non_sparse_columns = non_sparse_columns[~sparse_index]
             if all(sparse_index):  # If all the coef go to zero after thresholding
@@ -437,6 +483,7 @@ class sequentialThLin(MultiOutputMixin, RegressorMixin):
 
         final_coefs = self.coef_history_df.iloc[-1].fillna(0.0)
         self.coef_ = final_coefs.values
+        self.intercept_ = self.intercept_history_df.iloc[-1]["1"]
         # self.score = self.model.score
         self.feature_names_in_ = np.array(X.columns)
 
