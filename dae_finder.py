@@ -124,6 +124,38 @@ def add_noise_to_df(data_df, noise_perc, make_copy=True,
     return data_df_new
 
 
+def get_der_names(feature_list, get_list=False):
+    """
+    Utility function to get a strings denoting the derivatives of the features in the feature_list
+    :param feature_list: ['A', 'B', 'C'] or any iterable of strings
+    :param get_list: If True, a list of strings are returned, else a dictionary is returned.
+    :return: dictionary of the form {'A': 'd(A) /dt'}.
+    """
+    if get_list:
+        return ["d(" + feature + ") /dt" for feature in feature_list]
+    return {feature: "d(" + feature + ") /dt" for feature in feature_list}
+
+
+def der_matrix_calculator(data_matrix, delta_t, rename_feat=True):
+    """
+    Utility function to calculate the derivative matrix from a data matrix.
+    The data is assumed to be evenly spaced with a time interval delta_t in between.
+    Frist order forward difference is then used to find the derivative using (f(t+delta_t)-f(t))/delta_t
+    :param data_matrix: pd.DataFrame with features.
+    :param delta_t: time difference between subsequent data points.
+    :param rename_feat: if True, the features are renamed to reflected the derivative notation in the output.
+    :return: pd.DataFrame with len = len(data_matrix)-1.
+    """
+    assert delta_t > 1.e-10, "delta_t cannot be too small or negative"
+    derr_matrix = (data_matrix.iloc[1:].reset_index(drop=True) -
+                   data_matrix.iloc[:-1].reset_index(drop=True)) / delta_t
+    if rename_feat:
+        derr_names = get_der_names(data_matrix.columns)
+        derr_matrix.rename(columns=derr_names, inplace=True)
+
+    return derr_matrix
+
+
 """
 ------------------------------------------------------------------------------------
 ------------------------------------------------------------------------------------
