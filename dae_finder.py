@@ -11,6 +11,7 @@ import operator
 from copy import deepcopy
 
 from scipy.integrate import odeint
+from scipy import interpolate
 import matplotlib.pyplot as plt
 
 
@@ -154,6 +155,42 @@ def der_matrix_calculator(data_matrix, delta_t, rename_feat=True):
         derr_matrix.rename(columns=derr_names, inplace=True)
 
     return derr_matrix
+
+
+def der_label(feature, der=1):
+    if der == 0:
+        return feature
+    elif der == 1:
+        return "d({}) /dt".format(feature)
+    else:
+        return "d^{}({}) /dt^{}".format(der, feature, der)
+
+
+def smooth_data(data_matrix, domain_var="t", s_param=None, noise_perc=0, derr_order=1, eval_points=[]):
+    assert domain_var in data_matrix, "domain variable not found in the data matrix"
+
+    data_t = data_matrix[domain_var]
+    num_time_points = len(data_matrix)
+    find_s_param = (not s_param) and s_param != 0
+
+    if len(eval_points) == 0:
+        eval_points = np.linspace(data_t.iloc[0], data_t.iloc[-1], 10 * num_time_points)
+    t_eval_new = eval_points
+
+    data_matrix_ = data_matrix.drop(domain_var, axis=1)
+    data_matrix_std = data_matrix_.std()
+
+    data_matrix_smooth = pd.DataFrame(t_eval_new, columns=[domain_var])
+    for feature in data_matrix_:
+        if find_s_param:
+            # smoothing parameter: when equal weightage: num_data_points * std of data
+            s_param = num_time_points * (0.01 * noise_perc * data_matrix_std[feature]) ** 2
+        tck = interpolate.splrep(data_t, data_matrix_[feature], s=s_param)
+        for der_ind in range(derr_order + 1):
+            smoothed_data = interpolate.splev(t_eval_new, tck, der=der_ind)
+            data_matrix_smooth[der_label(feature, der_ind)] = smoothed_data
+
+    return data_matrix_smooth
 
 
 """
