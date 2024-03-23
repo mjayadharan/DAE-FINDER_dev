@@ -12,6 +12,9 @@ from copy import deepcopy
 
 from scipy.integrate import odeint
 from scipy import interpolate
+
+import sympy
+
 import matplotlib.pyplot as plt
 
 
@@ -191,6 +194,69 @@ def smooth_data(data_matrix, domain_var="t", s_param=None, noise_perc=0, derr_or
             data_matrix_smooth[der_label(feature, der_ind)] = smoothed_data
 
     return data_matrix_smooth
+
+
+def remove_paranth_from_feat(feature_list):
+    """
+    Utility function to remove the paranthesis from the name of the feature.
+    :param feature_list: ["[E]", "[ES]"]
+    :return: ["E", "ES"]
+    """
+    return [feat.replace("[", "").replace("]", "") for feat in feature_list]
+
+
+def poly_to_scipy(exp_list):
+    """
+    Utility function to convert the power symbol "^" from monomial strings to scipy compatible "**"
+     symbol for power.
+    :param exp_list: ["A^2", "A*B^3"]
+    :return: ["A**2", "A*B**3"]
+    """
+    return [exp.replace(" ", "*").replace("^", "**") for exp in exp_list]
+
+
+def get_factor_feat(factor_exp, feat_dict):
+    """
+    Utility function to return the list of expressions from expr_list which has factor_exp as a factor
+    factor_exp: sympy expression eg: [ES]**2
+    feat_dict : {'[ES]*[S]^2': [ES]*[S]**2}
+    """
+    return [feat for feat, feat_sym in feat_dict.items() if sympy.fraction(feat_sym / factor_exp)[1] == 1]
+
+
+def get_refined_lib(factor_exp, data_matrix_df_, candidate_library_, get_dropped_feat=False):
+    """
+    Utility function to get the refined library by removing all features in the candidate library which
+    has factor_exp as a factor in it.
+    :param factor_exp: sympy expression eg. S*ES
+    :param data_matrix_df_ (pd.DataFrame): data matrix containing all the state variables as column labels
+    :param candidate_library_ (pd.DataFrame): candidate library that needs to be refined.
+    :param get_dropped_feat: if True, both the dropped features and the refined library is returned,
+    else only the refined library is returned
+    :return: 
+    """
+    # Adding the state variables as scipy symbols
+    feat_list = list(data_matrix_df_.columns)
+    feat_list_str = ", ".join(remove_paranth_from_feat(data_matrix_df_.columns))
+    exec(feat_list_str + "= sympy.symbols(" + str(feat_list) + ")")
+
+    # Converting the monomials in the candidate library to scipy expressions
+    candid_features = remove_paranth_from_feat(poly_to_scipy(candidate_library_.columns))
+    candid_feat_dict = {}
+    for feat1, feat2 in zip(candidate_library_.columns, candid_features):
+        exec("candid_feat_dict['{}'] = {}".format(feat1, feat2))
+
+    dropped_feats = set()
+    if (isinstance(factor_exp, list) or isinstance(factor_exp, set)):
+        for factor_ in factor_exp:
+            dropped_feats = dropped_feats.union(set(get_factor_feat(factor_, candid_feat_dict)))
+    else:
+        dropped_feats = dropped_feats.union(set(get_factor_feat(factor_exp, candid_feat_dict)))
+
+    if get_dropped_feat:
+        return (dropped_feats, candidate_library_.drop(dropped_feats, axis=1))
+    else:
+        return candidate_library_.drop(dropped_feats, axis=1)
 
 
 """
