@@ -233,7 +233,7 @@ def get_refined_lib(factor_exp, data_matrix_df_, candidate_library_, get_dropped
     :param candidate_library_ (pd.DataFrame): candidate library that needs to be refined.
     :param get_dropped_feat: if True, both the dropped features and the refined library is returned,
     else only the refined library is returned
-    :return: 
+    :return:
     """
     # Adding the state variables as scipy symbols
     feat_list = list(data_matrix_df_.columns)
