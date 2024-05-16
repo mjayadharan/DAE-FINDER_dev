@@ -169,7 +169,25 @@ def der_label(feature, der=1):
         return "d^{}({}) /dt^{}".format(der, feature, der)
 
 
-def smooth_data(data_matrix, domain_var="t", s_param=None, noise_perc=0, derr_order=1, eval_points=[]):
+def smooth_data(data_matrix,
+                domain_var="t",
+                smooth_method ="spline",
+                s_param=None,
+                noise_perc=0,
+                derr_order=1,
+                eval_points=[]):
+    """
+    :param data_matrix: Data matrix to smoothen. nxp data frame structure is assumed where n is the number of
+                        data points and p is the number of features (predictors).
+    :param domain_var: Domain variable with respect to which the data needs to be smoothened. Default is assumed to be
+                        "t" (time).
+    :param smooth_method: Numerical method used for smoothening.
+    :param s_param: smoothening parameter.
+    :param noise_perc: optional estimate of noise to signal ratio %
+    :param derr_order: Number of derivatives need to be calculated, wrt the domain variable, after smoothening the data.
+    :param eval_points: option list of points at which the smoothened data and derivatives will be evaluated for output
+    :return: pd.DataFrame of size len(eval_points) x k where k is the number of features and their derivatives.
+    """
     assert domain_var in data_matrix, "domain variable not found in the data matrix"
 
     data_t = data_matrix[domain_var]
@@ -177,21 +195,25 @@ def smooth_data(data_matrix, domain_var="t", s_param=None, noise_perc=0, derr_or
     find_s_param = (not s_param) and s_param != 0
 
     if len(eval_points) == 0:
-        eval_points = np.linspace(data_t.iloc[0], data_t.iloc[-1], 10 * num_time_points)
+        eval_points = np.linspace(data_t.iloc[0], data_t.iloc[-1], num_time_points)
     t_eval_new = eval_points
 
     data_matrix_ = data_matrix.drop(domain_var, axis=1)
     data_matrix_std = data_matrix_.std()
 
     data_matrix_smooth = pd.DataFrame(t_eval_new, columns=[domain_var])
-    for feature in data_matrix_:
-        if find_s_param:
-            # smoothing parameter: when equal weightage: num_data_points * std of data
-            s_param = num_time_points * (0.01 * noise_perc * data_matrix_std[feature]) ** 2
-        tck = interpolate.splrep(data_t, data_matrix_[feature], s=s_param)
-        for der_ind in range(derr_order + 1):
-            smoothed_data = interpolate.splev(t_eval_new, tck, der=der_ind)
-            data_matrix_smooth[der_label(feature, der_ind)] = smoothed_data
+
+    if smooth_method == "spline":
+        for feature in data_matrix_:
+            if find_s_param:
+                # smoothing parameter: when equal weightage: num_data_points * std of data
+                s_param = num_time_points * (0.01 * noise_perc * data_matrix_std[feature]) ** 2
+            tck = interpolate.splrep(data_t, data_matrix_[feature], s=s_param)
+            for der_ind in range(derr_order + 1):
+                smoothed_data = interpolate.splev(t_eval_new, tck, der=der_ind)
+                data_matrix_smooth[der_label(feature, der_ind)] = smoothed_data
+    else:
+        raise "Smoothening type not supported"
 
     return data_matrix_smooth
 
@@ -386,6 +408,9 @@ prebuilt. Option to pass custom metric object. Can be extended to include other 
                                                           y=X_scaled[feature])
             r_2_dict_unsorted[feature] = self.model.score(X=X_scaled.drop([feature], axis=1),
                                                           y=X_scaled[feature])
+
+            #r_2_dict_unsorted = {feature: self.model.fit_score(X=X_scaled.drop([feature], axis=1),
+                                                          # y=X_scaled[feature]) for feature in X_scaled}
         self.r2_score_dict = dict(sorted(r_2_dict_unsorted.items(), key=operator.itemgetter(1)))
 
         return self
