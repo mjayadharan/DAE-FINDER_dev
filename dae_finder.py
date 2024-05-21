@@ -3,6 +3,11 @@ from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.base import MultiOutputMixin, RegressorMixin
 from sklearn import linear_model
 from sklearn.preprocessing import StandardScaler
+from sklearn.utils.validation import (
+    FLOAT_DTYPES,
+    _check_feature_names_in,
+    check_is_fitted,
+)
 
 import pandas as pd
 import numpy as np
@@ -12,6 +17,8 @@ from copy import deepcopy
 
 from scipy.integrate import odeint
 from scipy import interpolate
+from scipy.sparse import coo_array
+
 
 import sympy
 
@@ -310,6 +317,158 @@ class PolyFeatureMatrix(BaseEstimator, TransformerMixin):
             return poly_df
         else:
             return poly_data_matrix
+
+"""
+------------------------------------------------------------------------------------
+------------------------------------------------------------------------------------
+"""
+class FeatureCouplingTransformer(TransformerMixin, BaseEstimator):
+    """
+    Transformer class for generating features (candidate library functions) derived from coupling between features.
+    The coupling between features can either be implied from a sparsity matrix (preferred), or can be explicitly
+    provided to the constructor.
+
+    Coupling behavior of the features can be explicitly fed to the constructor using hte coupling_func argument. If no
+    coupling_func is provided, a second order interaction of the form feature_1*feature_2 is assumed.
+
+    Examples
+    ---------
+    Case 1: No coupling_func is provided (so default interaction coupling is assumed)
+
+    data_matrix_ = pd.DataFrame([[1,2,3], [4,5,6]], columns = ["t", "x", "y"])
+    row  = np.array([0, 0, 1, 1])
+    col  = np.array([0, 2, 2, 1])
+    data = np.array([4, 5, 7, 5])
+    sparsity_matrix = coo_array((data, (row, col)))
+    coupling_transf = FeatureCouplingTransformer(sparsity_matrix)
+    transformed_features = coupling_transf.fit_transform(data_matrix_)
+    print(coupling_transf.get_get_feature_names_out())
+    output: array(['t*t', 't*y', 'x*y', 'x*x'], dtype=object)
+
+    Case 1: Coupling function is provided.
+
+    data_matrix_ = pd.DataFrame([[1,2,3], [4,5,6]], columns = ["t", "x", "y"])
+    row  = np.array([0, 0, 1, 1])
+    col  = np.array([0, 2, 2, 1])
+    data = np.array([4, 5, 7, 5])
+    sparsity_matrix = coo_array((data, (row, col)))
+    def coup_fun(x,y,i,j,k=0):
+        return x-y-k
+    coupling_transf = FeatureCouplingTransformer(sp_array_2,
+                                           coupling_func= coup_fun,
+                                           coupling_namer= lambda x,y,i,j,k : "{}-{}-{}".format(x,y,k),
+                                           coupling_func_args={"k":2})
+    transformed_features = coupling_transf.fit_transform(data_matrix_)
+    print(coupling_transf.get_get_feature_names_out())
+    array(['t-t-2', 't-y-2', 'x-y-2', 'x-x-2'], dtype=object)
+
+    """
+
+    def __init__(self, sparsity_matrix=None, coupled_indices_list=None,
+                 coupling_func=None, coupling_namer=None,
+                 coupling_func_args={}, return_df=False):
+        """
+        Note that if coupled indices list is not explicitly given to the constructor, a valid sparsity matrix
+        from which the coupled indices can be implied should be provided.
+
+        @param sparsity_matrix: Sparsity matrix in the scipy.sparse.coo_array format (preferred over directly
+                                providing coupled_indices_list
+        @param coupled_indices_list: List of tuples [(i,j)] which shows coupling between factors with indices i and j
+        @param coupling_func: Custom function to define coupling between features.  Note that the coupling_func function
+                              should have arguments (feature_1_value,feature_2_value, i, j) as the first four arguments.
+        @param coupling_namer: Custom function to name the feature corresponding to each coupling. Note that the
+                               coupling_namer function should have arguments (feature_1_value,feature_2_value, i, j)
+                                as the first four arguments.
+        @param coupling_func_args: optional keyword arguments for the coupling_function and coupling_namer functions
+        @param return_df: bool flag to output pandas DataFrame instead of numpy array. False by default
+        """
+
+        if not coupled_indices_list:
+            assert isinstance(sparsity_matrix, coo_array), "FeatureDiffTransformer only support sparsity matrix\
+            in the scipy.sparse.coo_array format"
+            self.sparsity_matrix = sparsity_matrix
+        self.coupled_indices_list = coupled_indices_list
+        if not coupling_func:
+            self.coupling_func = lambda x, y, i, j: x * y
+        else:
+            # If coupling function is not given, it is defined as the interaction term feature_1*feature_2
+            self.coupling_func = coupling_func
+
+        if not coupling_namer:
+            self.coupling_namer = lambda feature_1, feature_2, i, j: "{}*{}".format(feature_1, feature_2)
+        else:
+            self.coupling_namer = coupling_namer
+
+        self.coupling_func_args = coupling_func_args
+        self.return_df = return_df
+
+
+        self.n_features_in_ = 0
+        self.feature_names_in_ = None
+
+    def get_feature_names_out(self, input_features=None):
+        """
+        Get output feature names for transformation.
+
+        @param input_features: - If `input_features is None`, then `feature_names_in_` is
+                                 used as feature names in. If `feature_names_in_` is not defined,
+                                  then the following input feature names are generated:
+                                  `["x0", "x1", ..., "x(n_features_in_ - 1)"]`.
+                                 - If `input_features` is an array-like, then `input_features` must
+                                  match `feature_names_in_` if `feature_names_in_` is defined.
+            It is recommended that the coupling between features are given using a sparsity matrix
+            instead of coupling indices.
+        @return: feature_names_out : ndarray of str objects
+            Transformed feature names.
+        """
+
+        check_is_fitted(self)
+        input_features = _check_feature_names_in(self, input_features)
+
+        feature_names = [self.coupling_namer(input_features[i], input_features[j], i, j, **self.coupling_func_args) for
+                         i, j in self.coupled_indices_list]
+
+        return np.asarray(feature_names, dtype=object)
+
+    def fit(self, X, y=None):
+
+        self.n_features_in_ = X.shape[1]
+        if len(X.columns) > 0:
+            self.feature_names_in_ = X.columns
+        if not self.coupled_indices_list:  # sparsity matrix gives the coupling indices
+            assert max(self.sparsity_matrix.col.max(), self.sparsity_matrix.row.max()) <= self.n_features_in_ - 1, \
+                "sparsity matrix has indices out of bound of the number of features"
+            # Extracting the indices that has coupling with each other.
+            self.coupled_indices_list = list(zip(self.sparsity_matrix.row, self.sparsity_matrix.col))
+
+        return self
+
+    def transform(self, X):
+        """Transform data to output the coupled features
+
+        Parameters
+        ----------
+        X : {array-like, sparse matrix} of shape (n_samples, n_features)
+            The data to transform, row by row.
+
+        Returns
+        -------
+        XP : {ndarray, sparse matrix} of shape (n_samples, NS)
+            The matrix of features, where `NS` is the number of non-zero
+            connections implied from the sparsity matrix. NS = len(self.get_features_names_out())
+        """
+        check_is_fitted(self)
+
+        X = self._validate_data(
+            X, order="F", dtype=FLOAT_DTYPES, reset=False, accept_sparse=("csr", "csc")
+        )
+        X_transpose = X.T
+        X_coupled = np.vstack([self.coupling_func(X_transpose[i], X_transpose[j], i, j, **self.coupling_func_args)
+                               for i, j in self.coupled_indices_list]).T
+        if self.return_df:
+            return pd.DataFrame(X_coupled, columns=self.get_feature_names_out())
+
+        return X_coupled
 
 """
 ------------------------------------------------------------------------------------
