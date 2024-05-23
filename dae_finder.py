@@ -531,6 +531,7 @@ prebuilt. Option to pass custom metric object. Can be extended to include other 
             y=None,
             scale_columns=False,
             center_mean=False,
+            features_to_fit = None,
             coupling_matrix = None,
             ):
         """
@@ -559,8 +560,9 @@ prebuilt. Option to pass custom metric object. Can be extended to include other 
                 self.column_scales['1'] = 1
         else:
             X_scaled = X
-
-        for feature in X_scaled:
+        if not features_to_fit:
+            features_to_fit = X_scaled.columns
+        for feature in features_to_fit:
             self.model.fit(X=X_scaled.drop([feature], axis=1), y=X_scaled[feature])
             self.__fitted_models[feature] = dict(zip(self.model.feature_names_in_, self.model.coef_))
             self.__fitted_model_intercepts[feature] = self.model.intercept_
