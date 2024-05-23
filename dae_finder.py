@@ -530,7 +530,8 @@ prebuilt. Option to pass custom metric object. Can be extended to include other 
             X,
             y=None,
             scale_columns=False,
-            center_mean=False
+            center_mean=False,
+            coupling_matrix = None,
             ):
         """
         X -> Data matrix (either (n,m) numpy array or pandas DF), where each column represents
