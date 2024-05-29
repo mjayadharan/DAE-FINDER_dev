@@ -532,12 +532,15 @@ prebuilt. Option to pass custom metric object. Can be extended to include other 
             scale_columns=False,
             center_mean=False,
             features_to_fit = None,
+            feature_to_library_map ={},
             coupling_matrix = None,
             ):
+
         """
         X -> Data matrix (either (n,m) numpy array or pandas DF), where each column represents
              one feature from the candidate library.
         scale_columns -> divide the columns by std to get a unit variance for columns.
+        features_to_fit -> List of features to fit against the rest of the library terms
         """
         if self.fit_intercept:
             assert "1" not in X, ("Constant column should not be part of the data set if fit_intercept "
@@ -562,13 +565,24 @@ prebuilt. Option to pass custom metric object. Can be extended to include other 
             X_scaled = X
         if not features_to_fit:
             features_to_fit = X_scaled.columns
+
+
         for feature in features_to_fit:
-            self.model.fit(X=X_scaled.drop([feature], axis=1), y=X_scaled[feature])
+            #If feature to library map is not given, all the members of the universal
+            # candidate library will be fit against the feature.
+            if not feature in feature_to_library_map:
+                possible_library_terms = X_scaled.columns.drop(feature, errors='ignore')
+            else:
+                possible_library_terms = feature_to_library_map[feature]
+                assert set(possible_library_terms) <= set(X_scaled.columns), \
+                    ("library terms for feature {} from feature_to_library_map is not found"
+                     "in the universal X library")
+            self.model.fit(X=X_scaled[possible_library_terms], y=X_scaled[feature])
             self.__fitted_models[feature] = dict(zip(self.model.feature_names_in_, self.model.coef_))
             self.__fitted_model_intercepts[feature] = self.model.intercept_
-            self.model.score(X=X_scaled.drop([feature], axis=1),
-                                                          y=X_scaled[feature])
-            r_2_dict_unsorted[feature] = self.model.score(X=X_scaled.drop([feature], axis=1),
+            # self.model.score(X=X_scaled[possible_library_terms],
+            #                                               y=X_scaled[feature])
+            r_2_dict_unsorted[feature] = self.model.score(X=X_scaled[possible_library_terms],
                                                           y=X_scaled[feature])
 
             #r_2_dict_unsorted = {feature: self.model.fit_score(X=X_scaled.drop([feature], axis=1),
