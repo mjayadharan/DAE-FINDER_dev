@@ -4,24 +4,10 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="093e6c2a-e35c-4ee4-b395-6646c5426212" name="Changes" comment="Implemented the Feature coupling Transformer and moved the class toe dae_finder file. Also added enough docstring">
-      <change afterPath="$PROJECT_DIR$/.idea/DAE-FINDER_dev.iml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/inspectionProfiles/profiles_settings.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/vcs.xml" afterDir="false" />
+    <list default="true" id="093e6c2a-e35c-4ee4-b395-6646c5426212" name="Changes" comment="Added the feature to algebraic model finder fit method to take in a map ofthe form {feature: possible library terms on the RHS}. Now the large perturbation can find most of the algebraic expression for P_i, as long as we avoid fitting P_i-s against each other.">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.ipynb_checkpoints/power_grid_data_1-checkpoint.ipynb" beforeDir="false" afterPath="$PROJECT_DIR$/.ipynb_checkpoints/power_grid_data_1-checkpoint.ipynb" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.ipynb_checkpoints/power_grid_data_1-larger_perturb_zero_gamma-checkpoint.ipynb" beforeDir="false" afterPath="$PROJECT_DIR$/.ipynb_checkpoints/power_grid_data_1-larger_perturb_zero_gamma-checkpoint.ipynb" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.ipynb_checkpoints/power_grid_data_1-small_perturb_zero_gamma-checkpoint.ipynb" beforeDir="false" afterPath="$PROJECT_DIR$/.ipynb_checkpoints/power_grid_data_1-small_perturb_zero_gamma-checkpoint.ipynb" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/DAE_demo_1.ipynb" beforeDir="false" afterPath="$PROJECT_DIR$/DAE_demo_1.ipynb" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/DAE_draft_1.ipynb" beforeDir="false" afterPath="$PROJECT_DIR$/DAE_draft_1.ipynb" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/MM_example_clutering.ipynb" beforeDir="false" afterPath="$PROJECT_DIR$/MM_example_clutering.ipynb" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/SVD_testing_2.ipynb" beforeDir="false" afterPath="$PROJECT_DIR$/SVD_testing_2.ipynb" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/SVD_testing_2_sparser_data_final.ipynb" beforeDir="false" afterPath="$PROJECT_DIR$/SVD_testing_2_sparser_data_final.ipynb" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/dae_finder.py" beforeDir="false" afterPath="$PROJECT_DIR$/dae_finder.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/power_grid_data_1-larger_perturb_zero_gamma.ipynb" beforeDir="false" afterPath="$PROJECT_DIR$/power_grid_data_1-larger_perturb_zero_gamma.ipynb" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/power_grid_data_1-small_perturb_zero_gamma.ipynb" beforeDir="false" afterPath="$PROJECT_DIR$/power_grid_data_1-small_perturb_zero_gamma.ipynb" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/power_grid_data_1.ipynb" beforeDir="false" afterPath="$PROJECT_DIR$/power_grid_data_1.ipynb" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/svd_testing_plot_gen.ipynb" beforeDir="false" afterPath="$PROJECT_DIR$/svd_testing_plot_gen.ipynb" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -83,12 +69,25 @@
       <option name="presentableId" value="Default" />
       <updated>1716237436306</updated>
       <workItem from="1716237437378" duration="6459000" />
-      <workItem from="1716996822246" duration="5923000" />
+      <workItem from="1716996822246" duration="9951000" />
     </task>
+    <task id="LOCAL-00001" summary="Added the feature to algebraic model finder fit method to take in a map ofthe form {feature: possible library terms on the RHS}. Now the large perturbation can find most of the algebraic expression for P_i, as long as we avoid fitting P_i-s against each other.">
+      <option name="closed" value="true" />
+      <created>1717018793260</created>
+      <option name="number" value="00001" />
+      <option name="presentableId" value="LOCAL-00001" />
+      <option name="project" value="LOCAL" />
+      <updated>1717018793260</updated>
+    </task>
+    <option name="localTasksCounter" value="2" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
     <option name="version" value="3" />
+  </component>
+  <component name="VcsManagerConfiguration">
+    <MESSAGE value="Added the feature to algebraic model finder fit method to take in a map ofthe form {feature: possible library terms on the RHS}. Now the large perturbation can find most of the algebraic expression for P_i, as long as we avoid fitting P_i-s against each other." />
+    <option name="LAST_COMMIT_MESSAGE" value="Added the feature to algebraic model finder fit method to take in a map ofthe form {feature: possible library terms on the RHS}. Now the large perturbation can find most of the algebraic expression for P_i, as long as we avoid fitting P_i-s against each other." />
   </component>
   <component name="com.intellij.coverage.CoverageDataManagerImpl">
     <SUITE FILE_PATH="coverage/DAE_FINDER_dev$dae_finder.coverage" NAME="dae_finder Coverage Results" MODIFIED="1716262770804" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
