@@ -5,10 +5,11 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="093e6c2a-e35c-4ee4-b395-6646c5426212" name="Changes" comment="Added the feature to algebraic model finder fit method to take in a map ofthe form {feature: possible library terms on the RHS}. Now the large perturbation can find most of the algebraic expression for P_i, as long as we avoid fitting P_i-s against each other.">
-      <change afterPath="$PROJECT_DIR$/larger_perturb_recovery.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/power_grid_recovery.ipynb" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/DAE-FINDER_dev.iml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/DAE-FINDER_dev.iml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/power_grid_data_1-larger_perturb_zero_gamma.ipynb" beforeDir="false" afterPath="$PROJECT_DIR$/power_grid_data_1-larger_perturb_zero_gamma.ipynb" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/dae_finder.py" beforeDir="false" afterPath="$PROJECT_DIR$/dae_finder.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/power_grid_data_1-larger_perturb_high_degree-Copy1.ipynb" beforeDir="false" afterPath="$PROJECT_DIR$/power_grid_data_1-larger_perturb_high_degree-Copy1.ipynb" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/power_grid_data_1-larger_perturb_new.ipynb" beforeDir="false" afterPath="$PROJECT_DIR$/power_grid_data_1-larger_perturb_new.ipynb" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -57,7 +58,7 @@
     "node.js.selected.package.eslint": "(autodetect)",
     "node.js.selected.package.tslint": "(autodetect)",
     "nodejs_package_manager_path": "npm",
-    "settings.editor.selected.configurable": "com.jetbrains.python.configuration.PyActiveSdkModuleConfigurable",
+    "settings.editor.selected.configurable": "com.jetbrains.python.documentation.PythonDocumentationConfigurable",
     "vue.rearranger.settings.migration": "true"
   }
 }]]></component>
@@ -79,6 +80,7 @@
       <updated>1716237436306</updated>
       <workItem from="1716237437378" duration="6459000" />
       <workItem from="1716996822246" duration="11107000" />
+      <workItem from="1718124540818" duration="4956000" />
     </task>
     <task id="LOCAL-00001" summary="Added the feature to algebraic model finder fit method to take in a map ofthe form {feature: possible library terms on the RHS}. Now the large perturbation can find most of the algebraic expression for P_i, as long as we avoid fitting P_i-s against each other.">
       <option name="closed" value="true" />

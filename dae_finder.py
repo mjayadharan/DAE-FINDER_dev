@@ -212,7 +212,7 @@ def smooth_data(data_matrix,
 
     if smooth_method == "spline":
         for feature in data_matrix_:
-            if find_s_param:
+            if not find_s_param:
                 # smoothing parameter: when equal weightage: num_data_points * std of data
                 s_param = num_time_points * (0.01 * noise_perc * data_matrix_std[feature]) ** 2
             tck = interpolate.splrep(data_t, data_matrix_[feature], s=s_param)
@@ -287,6 +287,35 @@ def get_refined_lib(factor_exp, data_matrix_df_, candidate_library_, get_dropped
     else:
         return candidate_library_.drop(dropped_feats, axis=1)
 
+
+def compare_models_(models_df_1, models_df_2, tol=1.e-5):
+    """
+    Utility function to compare the structure of two models. Note that model_df_1 and model_df_2
+    should have the same column labels, index labels, and shape. Returns a data frame with the same
+    shape as the model data frames being compared. 0 will appear whenever the term strcture matches
+    between two model df, +1 appears when a term is present in models_df_1, and absent in models_df_2.
+    Similarly, -1 appears when a term is absent in models_df_1, and present in models_df_2.
+    @param models_df_1: pd.DataFrame with columns = [LHS of model] index = terms in the RHS of model.
+    @param models_df_2: pd.DataFrame with columns = [LHS of model] index = terms in the RHS of model.
+    @param tol: tolerance that will be used for comparing model structure.
+    @return: pd.DataFrame of the same shape as models_df_1 and models_df_2. 0 will appear whenever the term strcture matches
+    between two model df, +1 appears when a term is present in models_df_1, and absent in models_df_2.
+    Similarly, -1 appears when a term is absent in models_df_1, and present in models_df_2.
+    """
+    assert models_df_1.shape == models_df_2.shape, "both model dataframes should be of the same shape"
+    assert all(models_df_1.columns == models_df_2.columns) and all(models_df_1.index == models_df_2.index)
+
+    models_df_1[abs(models_df_1) > tol] = 1
+    models_df_1[abs(models_df_1) <= tol] = 0
+
+    models_df_2[abs(models_df_2) > tol] = 1
+    models_df_2[abs(models_df_2) <= tol] = 0
+
+    model_diff_df = models_df_1 - models_df_2
+
+    model_diff_df.loc["# incosistent terms"] = abs(model_diff_df).sum()
+
+    return model_diff_df
 
 """
 ------------------------------------------------------------------------------------
@@ -683,6 +712,19 @@ prebuilt. Option to pass custom metric object. Can be extended to include other 
             coef_value in coef_features.items()) + fitted_intercepts[feature]
 
         return prediction_df
+
+    def compare_models(self, true_model_df):
+        """
+        Method to compare the accuray of fitted models with true model structure. This method calls the
+        utility function compare_models_(self.best_models(), true_model_df) to compare the best models
+        after fitting with the true model structure. The true model dataframe should have the same column labels,
+        index labels, and shape as the models from self.best_models() .
+
+        @param true_model_df:  pd.DataFrame with columns = [LHS of model] index = terms in the RHS of model.
+        """
+        assert self.is_fit, "Models need to be fit to data first"
+        return compare_models_(self.best_models(), true_model_df)
+
 
 
 """
