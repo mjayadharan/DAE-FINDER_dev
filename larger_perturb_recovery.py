@@ -18,8 +18,8 @@ from scipy.sparse import coo_array
 5:
 skip_n_rows_btw = 100
 rows_to_keep = np.arange(0, len(data_matrix_df_orig), skip_n_rows_btw)
-6: data_matrix_df = data_matrix_df_orig.iloc[rows_to_keep].reset_index(drop=True)
-7:
+
+simplepass
 new_column_names = ["time", "Phi_0", "Phi_1", "Phi_2", "Phi_3", "Phi_4", "Phi_5",
                     "om_0", "om_1", "P_0", "P_1", "P_2", "P_3", "P_4", "P_5",
                     "Q_0", "Q_1", "Q_2", "Q_3", "Q_4", "Q_5"]

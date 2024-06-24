@@ -599,7 +599,7 @@ prebuilt. Option to pass custom metric object. Can be extended to include other 
         for feature in features_to_fit:
             #If feature to library map is not given, all the members of the universal
             # candidate library will be fit against the feature.
-            if not feature in feature_to_library_map:
+            if feature not in feature_to_library_map:
                 possible_library_terms = X_scaled.columns.drop(feature, errors='ignore')
             else:
                 possible_library_terms = feature_to_library_map[feature]
