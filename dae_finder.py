@@ -14,6 +14,7 @@ import numpy as np
 import warnings
 import operator
 from copy import deepcopy
+from itertools import permutations
 
 from scipy.integrate import odeint
 from scipy import interpolate
@@ -21,8 +22,11 @@ from scipy.sparse import coo_array
 
 
 import sympy
+from sympy import prod, Poly
 
 import matplotlib.pyplot as plt
+
+from joblib import delayed, Parallel
 
 
 """Data Generation functions
@@ -179,7 +183,7 @@ def der_label(feature, der=1):
 def smooth_data(data_matrix,
                 domain_var="t",
                 smooth_method ="spline",
-                s_param=None,
+                s_param_=None,
                 noise_perc=0,
                 derr_order=1,
                 eval_points=[]):
@@ -196,11 +200,9 @@ def smooth_data(data_matrix,
     :return: pd.DataFrame of size len(eval_points) x k where k is the number of features and their derivatives.
     """
     assert domain_var in data_matrix, "domain variable not found in the data matrix"
-
+    s_param = deepcopy(s_param_)
     data_t = data_matrix[domain_var]
     num_time_points = len(data_matrix)
-    find_s_param = (not s_param) and s_param != 0
-
     if len(eval_points) == 0:
         eval_points = np.linspace(data_t.iloc[0], data_t.iloc[-1], num_time_points)
     t_eval_new = eval_points
@@ -212,7 +214,7 @@ def smooth_data(data_matrix,
 
     if smooth_method == "spline":
         for feature in data_matrix_:
-            if not find_s_param:
+            if not s_param:
                 # smoothing parameter: when equal weightage: num_data_points * std of data
                 s_param = num_time_points * (0.01 * noise_perc * data_matrix_std[feature]) ** 2
             tck = interpolate.splrep(data_t, data_matrix_[feature], s=s_param)
@@ -227,11 +229,17 @@ def smooth_data(data_matrix,
 
 def remove_paranth_from_feat(feature_list):
     """
-    Utility function to remove the paranthesis from the name of the feature.
+    Utility function to remove the parenthesis from the name of the feature if they exists.
+    If either "[", or "]" are not present, the feature string is returned unchanged.
     :param feature_list: ["[E]", "[ES]"]
     :return: ["E", "ES"]
     """
-    return [feat.replace("[", "").replace("]", "") for feat in feature_list]
+    result_list = list(feature_list)
+    for ind, feat in enumerate(result_list):
+        if "[" in feat and "]" in feat:
+            result_list[ind] = feat.replace("[", "").replace("]", "")
+
+    return result_list
 
 
 def poly_to_scipy(exp_list):
@@ -286,6 +294,122 @@ def get_refined_lib(factor_exp, data_matrix_df_, candidate_library_, get_dropped
         return (dropped_feats, candidate_library_.drop(dropped_feats, axis=1))
     else:
         return candidate_library_.drop(dropped_feats, axis=1)
+
+
+def get_simplified_equation(best_model_df, feature,
+                            global_feature_list, coef_threshold,
+                            intercept_threshold= 0.01,
+                            intercept=0, simplified=True):
+
+    # Adding the state variables as scipy symbols
+    global_feature_list = list(global_feature_list)
+    global_feature_list_string = ", ".join(remove_paranth_from_feat(global_feature_list))
+    exec(global_feature_list_string + "= sympy.symbols(" + str(global_feature_list) + ")")
+
+
+    model_lhs = feature
+    model_lhs_sp_string = remove_paranth_from_feat(poly_to_scipy([model_lhs]))[0]
+
+    #Intercept below the threshold is assigned to zero
+    intercept = 0 if abs(intercept) < intercept_threshold else intercept
+
+    model_coefs = best_model_df[model_lhs].values
+    #Coefficients of features in the model below threshold is eliminated
+    model_coefs[abs(model_coefs) < coef_threshold] = 0
+
+    model_rhs_features = remove_paranth_from_feat(poly_to_scipy(best_model_df[model_lhs].keys()))
+
+
+    rhs_string_sp_string = [str(coef) + "*" + feature for coef, feature in zip(model_coefs, model_rhs_features) ]
+    rhs_string_sp_string = "+".join(rhs_string_sp_string) + "+" + str(intercept)
+
+    result_dict = {}
+    exec("result_dict['lhs'] = {}".format(model_lhs_sp_string))
+    exec("result_dict['rhs'] = {}".format(rhs_string_sp_string))
+
+    if not simplified:
+        return result_dict
+    else:
+        n, d = sympy.fraction(sympy.cancel(result_dict['rhs'] / result_dict['lhs']))
+        result_dict['lhs'] = d
+        result_dict['rhs'] = n
+
+    return result_dict
+
+
+def get_simplified_equation_list(best_model_df, global_feature_list,
+                                 coef_threshold, intercept_threshold= 0.01,
+                                 intercept_dict={}, simplified=True,
+                                 feature_list_=[]):
+
+    if len(feature_list_) > 0:
+        feature_list = deepcopy(feature_list_)
+        assert set(feature_list) <= set(best_model_df.columns), \
+            ("fit for some features missing from the best_model_df")
+    else:
+        feature_list = best_model_df.columns
+
+    result_dict = {feature: get_simplified_equation(best_model_df, feature,
+                                                    global_feature_list=global_feature_list,
+                                                    coef_threshold=coef_threshold,
+                                                    intercept_threshold=intercept_threshold,
+                                                    intercept=intercept_dict.get(feature, 0),
+                                                    simplified=simplified)
+                   for feature in feature_list}
+
+    return result_dict
+
+def sympy_symb_to_feature_name(sympy_symb, library_feat_names):
+    """
+
+    @param sympy_symb: sympy symbol string in format
+    @param library_feat_names:
+    @return:
+    """
+
+    symb_str = str(sympy_symb).strip()
+    if symb_str == "1":
+        return
+    symb_str = symb_str.replace("**", "^")
+    symb_list = symb_str.split("*")
+    possible_permutations = permutations(symb_list)
+    for symb_perm in possible_permutations:
+        feat = " ".join(symb_perm)
+        if feat in library_feat_names:
+            return feat
+
+    raise Exception("No feature corresponding to {} exist in the given library_df".format(sympy_symb))
+
+
+def construct_reduced_fit_list(full_feature_name_list, simplified_eqs,
+                               sympy_format=False):
+    relation_list = []
+    for simpl_eq in simplified_eqs.values():
+        lhs = simpl_eq["lhs"]
+        rhs = simpl_eq["rhs"]
+        lhs_list = []
+        rhs_list = []
+        try:
+            lhs_poly = Poly(lhs)
+            lhs_list = [prod(x ** k for x, k in zip(lhs_poly.gens, mon)) for mon in lhs_poly.monoms()]
+        except Exception as e:
+            print("***Warning: exception occured while trying to find the monomials of {}:  {}".format(lhs, e))
+
+        try:
+            rhs_poly = Poly(rhs)
+            rhs_list = [prod(x ** k for x, k in zip(rhs_poly.gens, mon)) for mon in rhs_poly.monoms()]
+        except Exception as e:
+            print("***Warning: exception occured while trying to find the monomials of {}:  {}".format(rhs, e))
+
+        relation_list.append(lhs_list + rhs_list)
+
+    if sympy_format:
+        return relation_list
+    else:
+        relation_in_lib_feat = [
+            [sympy_symb_to_feature_name(sympy_symb, full_feature_name_list) for sympy_symb in relations]
+            for relations in relation_list]
+        return relation_in_lib_feat
 
 
 def compare_models_(models_df_1, models_df_2, tol=1.e-5):
@@ -555,14 +679,27 @@ prebuilt. Option to pass custom metric object. Can be extended to include other 
                                                            fit_intercept=self.fit_intercept)
         self.column_scales = None
 
+    def fit_and_score(self, feature_, X_scaled_, feature_to_library_map_):
+        possible_library_terms = feature_to_library_map_[feature_]
+        X_features = X_scaled_[possible_library_terms]
+        y_target = X_scaled_[feature_]
+
+        self.model.fit(X=X_features, y=y_target)
+        coefficients = dict(zip(self.model.feature_names_in_, self.model.coef_))
+        intercept = self.model.intercept_
+        score = self.model.score(X_features, y_target)
+        return coefficients, intercept, score
+
     def fit(self,
             X,
             y=None,
             scale_columns=False,
             center_mean=False,
             features_to_fit = None,
-            feature_to_library_map ={},
+            feature_to_library_map_ ={},
             coupling_matrix = None,
+            parallelize = False,
+            num_cpu = 4
             ):
 
         """
@@ -575,6 +712,8 @@ prebuilt. Option to pass custom metric object. Can be extended to include other 
             assert "1" not in X, ("Constant column should not be part of the data set if fit_intercept "
                                   "is set to True")
         self.is_fit = True
+        feature_to_library_map = deepcopy(feature_to_library_map_)
+
         r_2_dict_unsorted = {}
         self.__fitted_models = {}
         self.__fitted_model_intercepts = {}
@@ -602,22 +741,44 @@ prebuilt. Option to pass custom metric object. Can be extended to include other 
             if feature not in feature_to_library_map:
                 possible_library_terms = X_scaled.columns.drop(feature, errors='ignore')
             else:
+                # print(feature_to_library_map)
+                # print(feature, "-reached here")
                 possible_library_terms = feature_to_library_map[feature]
                 assert set(possible_library_terms) <= set(X_scaled.columns), \
                     ("library terms for feature {} from feature_to_library_map is not found"
                      "in the universal X library")
-            self.model.fit(X=X_scaled[possible_library_terms], y=X_scaled[feature])
-            self.__fitted_models[feature] = dict(zip(self.model.feature_names_in_, self.model.coef_))
-            self.__fitted_model_intercepts[feature] = self.model.intercept_
-            # self.model.score(X=X_scaled[possible_library_terms],
+            feature_to_library_map[feature] = possible_library_terms
+
+
+            # self.model.fit(X=X_scaled[possible_library_terms], y=X_scaled[feature])
+            # self.__fitted_models[feature] = dict(zip(self.model.feature_names_in_, self.model.coef_))
+            # self.__fitted_model_intercepts[feature] = self.model.intercept_
+            # # self.model.score(X=X_scaled[possible_library_terms],
+            # #                                               y=X_scaled[feature])
+            # r_2_dict_unsorted[feature] = self.model.score(X=X_scaled[possible_library_terms],
             #                                               y=X_scaled[feature])
-            r_2_dict_unsorted[feature] = self.model.score(X=X_scaled[possible_library_terms],
-                                                          y=X_scaled[feature])
 
             #r_2_dict_unsorted = {feature: self.model.fit_score(X=X_scaled.drop([feature], axis=1),
                                                           # y=X_scaled[feature]) for feature in X_scaled}
+
+        # Using dictionary comprehensions to store model details and R² scores
+
+        # res = Parallel(n_jobs=20)(delayed(dummy)(x) for x in range(100))
+        if parallelize:
+            combined_fit_results_list = Parallel(n_jobs=num_cpu,require='sharedmem')(delayed(self.fit_and_score)
+                                                                 (feature, X_scaled, feature_to_library_map)
+                                                                 for feature in features_to_fit )
+            combined_fit_results = dict(zip(features_to_fit, combined_fit_results_list))
+        else:
+            combined_fit_results = {feature: self.fit_and_score(feature, X_scaled, feature_to_library_map) for feature in features_to_fit}
+
+        # Extracting separate dictionaries for coefficients, intercepts, and R² scores
+        self.__fitted_models = {feature: result[0] for feature, result in combined_fit_results.items()}
+        self.__fitted_model_intercepts = {feature: result[1] for feature, result in combined_fit_results.items()}
+        r_2_dict_unsorted = {feature: result[2] for feature, result in combined_fit_results.items()}
         self.r2_score_dict = dict(sorted(r_2_dict_unsorted.items(), key=operator.itemgetter(1)))
 
+        # feature_to_library_map = {}
         return self
 
     def best_models(self, num=0, X_test=None, metric="r2",
@@ -803,8 +964,12 @@ class sequentialThLin(MultiOutputMixin, RegressorMixin):
             self.model = custom_model_ob(**self.custom_model_arg)
             self.model_for_score = custom_model_ob(**self.custom_model_arg)
         elif self.model_id in no_constrain_model:
-            self.model = self.model_id_dict[self.model_id](fit_intercept=self.fit_intercept)
-            self.model_for_score = self.model_id_dict[self.model_id](fit_intercept=self.fit_intercept)
+            if fit_intercept:
+                self.model = self.model_id_dict[self.model_id](fit_intercept=True)
+                self.model_for_score = self.model_id_dict[self.model_id](fit_intercept=True)
+            else:
+                self.model = self.model_id_dict[self.model_id](fit_intercept=False)
+                self.model_for_score = self.model_id_dict[self.model_id](fit_intercept=False)
         elif self.model_id in elastic_models:
             arg_input = self.input_arg_dict
             self.model = self.model_id_dict[self.model_id](**arg_input)
