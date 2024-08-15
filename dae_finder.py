@@ -186,7 +186,8 @@ def smooth_data(data_matrix,
                 s_param_=None,
                 noise_perc=0,
                 derr_order=1,
-                eval_points=[]):
+                eval_points=[],
+                num_time_points=0):
     """
     :param data_matrix: Data matrix to smoothen. nxp data frame structure is assumed where n is the number of
                         data points and p is the number of features (predictors).
@@ -202,7 +203,8 @@ def smooth_data(data_matrix,
     assert domain_var in data_matrix, "domain variable not found in the data matrix"
     s_param = deepcopy(s_param_)
     data_t = data_matrix[domain_var]
-    num_time_points = len(data_matrix)
+    if num_time_points == 0:
+        num_time_points = len(data_matrix)
     if len(eval_points) == 0:
         eval_points = np.linspace(data_t.iloc[0], data_t.iloc[-1], num_time_points)
     t_eval_new = eval_points

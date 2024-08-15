@@ -2,4 +2,3 @@ checkpoints/
 __pycache__/
 .ipynb_checkpoints/
 .DS_Store
-test_folder/
