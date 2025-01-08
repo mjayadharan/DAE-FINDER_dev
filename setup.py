@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="DaeFinder",
-    version="0.1.0",
+    version="v0.2.1",
     description="A Python package to discover Differential Algebraic Equations from data.",
     long_description=open("README.md").read(),
     long_description_content_type="text/markdown",
