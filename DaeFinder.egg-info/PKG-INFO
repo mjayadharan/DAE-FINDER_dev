@@ -1,0 +1,46 @@
+Metadata-Version: 2.2
+Name: DaeFinder
+Version: 0.1.0
+Summary: A Python package to discover Differential Algebraic Equations from data.
+Home-page: https://github.com/mjayadharan/DAE-FINDER_dev
+Author: Manu Jayadharan
+Author-email: manu.jayadharan@gmail.com
+License: MIT
+Classifier: Programming Language :: Python :: 3
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Requires-Python: >=3.7
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: numpy
+Requires-Dist: scipy
+Requires-Dist: pandas
+Requires-Dist: sympy
+Requires-Dist: scikit-learn
+Requires-Dist: matplotlib
+Requires-Dist: joblib
+Dynamic: author
+Dynamic: author-email
+Dynamic: classifier
+Dynamic: description
+Dynamic: description-content-type
+Dynamic: home-page
+Dynamic: license
+Dynamic: requires-dist
+Dynamic: requires-python
+Dynamic: summary
+
+# DaeFinder
+
+DaeFinder is a Python package to discover Differential Algebraic Equations (DAEs) from data.
+
+## Features
+- Solve and analyze toy enzyme kinetics models.
+- Smooth noisy data and calculate derivatives.
+- Generate polynomial features for regression models.
+- Support for sparse feature coupling.
+
+## Installation
+Install the package via pip:
+```bash
+pip install DaeFinder

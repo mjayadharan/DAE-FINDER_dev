@@ -1,0 +1,11 @@
+# Include essential files
+include setup.py
+include LICENSE
+include README.md
+include pyproject.toml
+
+# Include all files in these directories
+recursive-include daeFinder *
+recursive-include Examples *
+
+
