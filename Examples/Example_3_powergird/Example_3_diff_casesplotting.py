@@ -4,12 +4,11 @@ import warnings
 pd.set_option('display.float_format', '{:0.8f}'.format)
 import matplotlib.pyplot as plt
 
-folder_names = {"case_4bus2gen_onetenthperturb",
+folder_names = ["case_4bus2gen_onetenthperturb",
                 "case_9bus3gen_onetenthperturb",
-                "case39bus10gen_onetenthperturb"}
+                "case39bus10gen_onetenthperturb"]
 
-case_names = ["Case 4", "Case 9", "Case 39"]
-
+case_names = ["IEEE-4", "IEEE-9", "IEEE-39"]
 #Loading data frames
 num_permutations = 4
 # folder_name_1 = "case39bus9gen_halfperturb"
@@ -21,9 +20,11 @@ snr = "30dB"
 # snr_list = ["No noise", "40dB", "30dB", "20dB"]
 result_df_dict = {}
 for folder_name_, case_name_ in zip(folder_names, case_names):
+    print(folder_name_, case_name_)
+    print("{}/{}-{}_noise_{}_permutation.csv".format(folder_name_, folder_name_, noise_perc_value,
+                                                                   num_permutations))
     result_df_dict[case_name_] = pd.read_csv(
-        "/Users/manu_jay/git_repos/DAE-FINDER_dev/Numerical_Exa"
-        "mple/power_grid/{}/{}-{}_noise_{}_permutation.csv".format(folder_name_, folder_name_, noise_perc_value,
+        "{}/{}-{}_noise_{}_permutation.csv".format(folder_name_, folder_name_, noise_perc_value,
                                                                    num_permutations))
 
 #Plotting each of the dataframes
@@ -49,8 +50,11 @@ total_relations_list = [6, 12, 49]
 
 # plt.plot(result_df_large[snr_]["#Perturbations"],
 #              (total_relations-result_df_large[snr_]["#Incorrect relationship"])*100/total_relations, '.-', label = "Large Perturbation")
-for case_name_, total_relations in zip(case_names, total_relations_list):
+markers = ['^', 'D', 'o']
+
+for case_name_, total_relations, marker_ in zip(case_names, total_relations_list, markers):
     print(case_name_)
+    print(total_relations)
     result_df = result_df_dict[case_name_]
     gen_full_recovery_pert_small = \
     result_df[result_df["#Incorrect gen relationship mean"] == 0]["#Perturbations"].iloc[0]
@@ -72,10 +76,9 @@ for case_name_, total_relations in zip(case_names, total_relations_list):
     plt.errorbar(result_df["#Perturbations"],
                  (total_relations - result_df["#Incorrect relationship mean"]) * 100 / total_relations,
                  (result_df["#Incorrect relationship std"]) * 100 / total_relations,
-                 fmt='-o', label=case_name_, capsize=5)
+                 fmt='-o', label=case_name_, capsize=5, color='#117733', marker=marker_)
     plt.plot([gen_full_recovery_pert_small], [gen_full_recovery_incorr_small], marker='o', markersize=15, linestyle='',
              markerfacecolor='none', label=label_, color='black')  # Square markers, no line
-
 
 
 
@@ -122,6 +125,5 @@ plt.legend(
 
 plt.title("Recovery of model for different cases with {} SNR signal".format(snr))
 
-plt.savefig('/Users/manu_jay/git_repos/DAE-FINDER_dev/Numerical_Example/power_grid/diff_cases_{}.svg'.format(snr),
+plt.savefig('diff_cases_{}.svg'.format(snr),
             format='svg', bbox_inches='tight')
-

@@ -5,30 +5,37 @@ import warnings
 pd.set_option('display.float_format', '{:0.8f}'.format)
 import matplotlib.pyplot as plt
 
-folder_names = {"case39bus9gen_halfperturb", "case39bus10gen_onetenthperturb"}
+folder_names = ["case39bus9gen_halfperturb", "case39bus10gen_onetenthperturb"]
 
 
 #Loading data frames
 num_permutations = 4
-folder_name_1 = "case39bus9gen_halfperturb"
-# folder_name_1 = "case39bus10gen_onetenthperturb"
+# folder_name_1 = "case39bus9gen_halfperturb"
+folder_name_1 = "case39bus10gen_onetenthperturb"
 noise_percent_list = [0, 0.0001, 0.001, 0.01]
 snr_list = ["No noise", "40dB", "30dB", "20dB"]
 result_dict_up = {}
 for noise_perc_value, snr in zip(noise_percent_list, snr_list):
     result_dict_up[snr] = pd.read_csv(
-        "/Users/manu_jay/git_repos/DAE-FINDER_dev/Numerical_Exa"
-        "mple/power_grid/{}/{}-{}_noise_{}_permutation.csv".format(folder_name_1, folder_name_1, noise_perc_value,
+        "{}/{}-{}_noise_{}_permutation.csv".format(folder_name_1, folder_name_1, noise_perc_value,
                                                                    num_permutations))
 
 #Plotting each of the dataframes
 total_relations = 49
 from matplotlib import pyplot as plt
 
+
+
+plt.xticks(fontsize=14)  # Increase font size of x-axis ticks
+plt.yticks(fontsize=14)  # Increase font size of y-axis ticks
+color_dict = {"No noise":"#332288",
+              "40dB": "#CC6677",
+              "30dB":"#117733",
+               "20dB":"#882255"}
 for snr, result_df_ in result_dict_up.items():
     # plt.plot(result_df_["#Perturbations"],
     #          (total_relations-result_df_["#Incorrect relationship"])*100/total_relations, '.-', label = snr)
-    line_fmt = '-o' if folder_name_1 == "case39bus10gen_onetenthperturb" else '--^'
+    line_fmt = '-o' if folder_name_1 == "case39bus10gen_onetenthperturb" else '--o'
 
     gen_full_recovery_pert = result_df_[result_df_["#Incorrect gen relationship mean"] == 0]["#Perturbations"].iloc[0]
     gen_full_recovery_incorr = (total_relations - result_df_[result_df_["#Incorrect gen relationship mean"] == 0][
@@ -42,7 +49,7 @@ for snr, result_df_ in result_dict_up.items():
     line, _, _ = plt.errorbar(result_df_["#Perturbations"],
                               (total_relations - result_df_["#Incorrect relationship mean"]) * 100 / total_relations,
                               (result_df_["#Incorrect relationship std"]) * 100 / total_relations,
-                              fmt=line_fmt, label=snr, capsize=5)
+                              fmt=line_fmt, label=snr, capsize=5, color=color_dict[snr])
     label_ = '100% Generator Recovery' if snr == "30dB" else ""
     plt.plot([gen_full_recovery_pert], [gen_full_recovery_incorr], marker='o',
              markersize=15, linestyle='', markerfacecolor='none', label=label_,
@@ -72,12 +79,10 @@ plt.legend(
     edgecolor='black'
 )
 if folder_name_1 == "case39bus10gen_onetenthperturb":
-    plt.title("Small perturbations")
+    plt.title("Weak perturbations")
 elif folder_name_1 == "case39bus9gen_halfperturb":
-    plt.title("Large perturbations")
+    plt.title("Strong perturbations")
 # plt.legend()
 
-plt.savefig('/Users/manu_jay/git_repos/DAE-FINDER_dev/Numerical_Example/power_grid/{}.svg'.format(folder_name_1),
+plt.savefig('{}.svg'.format(folder_name_1),
             format='svg', bbox_inches='tight')
-
-

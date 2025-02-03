@@ -1,0 +1,5 @@
+#Perturbations,#Incorrect relationship mean,#Incorrect relationship std,#Incorrect gen relationship mean,#Incorrect gen relationship std,Noise Level
+1,40.0,0.0,1.0,0.0,0.01
+41,11.5,2.5,0.0,0.0,0.01
+81,4.0,0.0,0.0,0.0,0.01
+100,5.0,0.0,0.0,0.0,0.01
