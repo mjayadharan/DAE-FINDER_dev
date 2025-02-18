@@ -940,6 +940,7 @@ class sequentialThLin(MultiOutputMixin, RegressorMixin):
             positive=False,
             random_state=None,
             selection="cyclic",
+            silent=False
     ):
         self.model_id = model_id
         self.custom_model = custom_model
@@ -959,6 +960,7 @@ class sequentialThLin(MultiOutputMixin, RegressorMixin):
         self.warm_start = warm_start,
         self.positive = positive,
         self.random_state = random_state,
+        self.silent = silent
         self.selection = selection,
 
         self.input_arg_dict = {"alpha": alpha,
@@ -1042,7 +1044,8 @@ class sequentialThLin(MultiOutputMixin, RegressorMixin):
                 break
 
             if set(X_ind.columns) == set(non_sparse_columns):
-                print("Sequential threshold converged in {} iterations".format(ind))
+                if not self.silent:
+                    print("Sequential threshold converged in {} iterations".format(ind))
                 break
             else:
                 X_ind = X[non_sparse_columns]
