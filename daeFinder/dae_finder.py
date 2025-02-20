@@ -20,6 +20,7 @@ from itertools import permutations
 
 from scipy.integrate import odeint
 from scipy import interpolate
+from scipy.signal import savgol_filter
 from scipy.sparse import coo_array
 
 
