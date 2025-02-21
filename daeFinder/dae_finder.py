@@ -191,7 +191,9 @@ def smooth_data(data_matrix,
                 derr_order=1,
                 eval_points=[],
                 num_time_points=0,
-                silent =True):
+                polyorder=2,
+                window_smooth=None
+                ):
     """
     :param data_matrix: Data matrix to smoothen. nxp data frame structure is assumed where n is the number of
                         data points and p is the number of features (predictors).
@@ -205,6 +207,7 @@ def smooth_data(data_matrix,
     :return: pd.DataFrame of size len(eval_points) x k where k is the number of features and their derivatives.
     """
     assert domain_var in data_matrix, "domain variable not found in the data matrix"
+    assert len(data_matrix)>3, "At least 3 data points required for smoothening"
     s_param = deepcopy(s_param_)
     data_t = data_matrix[domain_var]
     if num_time_points == 0:
@@ -216,9 +219,9 @@ def smooth_data(data_matrix,
     data_matrix_ = data_matrix.drop(domain_var, axis=1)
     data_matrix_std = data_matrix_.std()
 
-    data_matrix_smooth = pd.DataFrame(t_eval_new, columns=[domain_var])
 
     if smooth_method == "spline":
+        data_matrix_smooth = pd.DataFrame(t_eval_new, columns=[domain_var])
         if s_param:
             s_param_list = [s_param for feature in data_matrix_]
         else:
@@ -235,21 +238,30 @@ def smooth_data(data_matrix,
         column_label_list = list(itertools.chain.from_iterable(column_label_list))
         smoothened_df = pd.DataFrame(smoothened_values, columns=column_label_list)
         data_matrix_smooth = pd.concat([data_matrix_smooth, smoothened_df], axis=1)
+        return data_matrix_smooth
 
-        # for feature in data_matrix_:
-        #     if not s_param:
-        #         # smoothing parameter: when equal weightage: num_data_points * std of data
-        #         s_param = num_time_points * (0.01 * noise_perc * data_matrix_std[feature]) ** 2
-        #     tck = interpolate.splrep(data_t, data_matrix_[feature], s=s_param)
-        #     for der_ind in range(derr_order + 1):
-        #         smoothed_data = interpolate.splev(t_eval_new, tck, der=der_ind)
-        #         data_matrix_smooth[der_label(feature, der_ind)] = smoothed_data
+    elif smooth_method == "SG": #Savitzky-Golay filler for smooth derivatives
+        if not window_smooth:
+            window_size = len(data_t)//15
+        else:
+            window_size = len(data_t)//window_smooth
+        assert polyorder<window_size, "Polynomial degreee for interpolation must be less than window length"
+        data_matrix_smooth = pd.DataFrame(data_t, columns=[domain_var])
+        delta_t = data_t[1] - data_t[0] #Spacing of data (assumed to be uniform)
+
+        smoothened_values_list = [np.column_stack([savgol_filter(data_matrix_[feature], window_length=window_size, polyorder=polyorder,
+                            deriv=der_ind, delta=delta_t)
+                                    for der_ind in range(derr_order + 1)])
+                                    for feature in data_matrix_]
+        smoothened_values = np.column_stack(smoothened_values_list)
+        column_label_list = [[der_label(feature, der_ind) for der_ind in range(derr_order + 1)]
+                                for feature in data_matrix_]
+        column_label_list = list(itertools.chain.from_iterable(column_label_list))
+        smoothened_df = pd.DataFrame(smoothened_values, columns=column_label_list)
+        data_matrix_smooth = pd.concat([data_matrix_smooth, smoothened_df], axis=1)
+        return data_matrix_smooth
     else:
         raise "Smoothening type not supported"
-
-    if not silent:
-        print("Returning the smoothened data")
-    return data_matrix_smooth
 
 def remove_paranth_from_feat(feature_list):
     """
