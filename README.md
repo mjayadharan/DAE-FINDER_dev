@@ -23,7 +23,7 @@ If you use DaeFinder for your development or research, please cite the SODAs pap
 
 ---
 
-## **Dependencies**
+### **Dependencies**
 
 The following Python packages are required to use `DaeFinder`:
 
