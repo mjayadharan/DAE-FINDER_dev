@@ -301,6 +301,9 @@ def get_refined_lib(factor_exp, data_matrix_df_, candidate_library_, get_dropped
     """
     Utility function to get the refined library by removing all features in the candidate library which
     has factor_exp as a factor in it.
+
+    ***Warning: This function doesnt work for compiled version of python because of the use of exec() function.
+    If CPython is used, please use get_refined_lib_stable and avoid usage of paranthesis in feature names***
     :param factor_exp: sympy expression eg. S*ES
     :param data_matrix_df_ (pd.DataFrame): data matrix containing all the state variables as column labels
     :param candidate_library_ (pd.DataFrame): candidate library that needs to be refined.
@@ -330,6 +333,59 @@ def get_refined_lib(factor_exp, data_matrix_df_, candidate_library_, get_dropped
         return (dropped_feats, candidate_library_.drop(dropped_feats, axis=1))
     else:
         return candidate_library_.drop(dropped_feats, axis=1)
+
+
+def get_refined_lib_stable(factor_exp, data_matrix_df_, candidate_library_, get_dropped_feat=False):
+    """
+    ****Warninig: This function won't work if there is paranthesis in the feature names.****
+    Utility function to get the refined library by removing all features in the candidate library which
+    have factor_exp as a factor.
+    Note that this is the stable version of  get_refined_lib function which deoes not call
+    exec(), but does not work with parenthesis in the feature names.
+    
+    :param factor_exp: sympy expression (or list/set of sympy expressions), e.g. S*ES or [ES]**2
+    :param data_matrix_df_ (pd.DataFrame): data matrix containing all the state variables as column labels
+    :param candidate_library_ (pd.DataFrame): candidate library whose columns are monomial strings like "[S]*[E]^2"
+    :param get_dropped_feat: if True, return (dropped_set, refined_df); else just return refined_df
+    :return: refined candidate‐library DataFrame (and optionally the set of dropped column names)
+    """
+    # 1) build a clean list of feature‐names (no brackets) and create matching Sympy symbols
+
+    raw_feats = list(data_matrix_df_.columns)
+    if any("[" in feat or "]" in feat for feat in raw_feats):
+        return get_refined_lib(factor_exp, data_matrix_df_, candidate_library_, get_dropped_feat)
+    # clean_feats = remove_paranth_from_feat(raw_feats)
+    symbols = sympy.symbols(" ".join(raw_feats))
+    sym_map = dict(zip(raw_feats, symbols))
+
+    # 2) (re-)parse factor_exp into this local symbol space
+    def _parse(fe):
+        # turn anything (sympy or string) into a sympified expression
+        return sympy.sympify(str(fe), locals=sym_map)
+
+    if isinstance(factor_exp, (list, set)):
+        factors = [_parse(fe) for fe in factor_exp]
+    else:
+        factors = [_parse(factor_exp)]
+
+    # 3) build your candidate‐feature dict by parsing each candidate column
+    raw_cand = list(candidate_library_.columns)
+    cand_strs = remove_paranth_from_feat(poly_to_scipy(raw_cand))
+    candid_feat_dict = {
+        raw: sympy.sympify(expr_str, locals=sym_map)
+        for raw, expr_str in zip(raw_cand, cand_strs)
+    }
+
+
+    dropped_feats = set()
+    for factor_ in factors:
+        dropped_feats = dropped_feats.union(set(get_factor_feat(factor_, candid_feat_dict)))
+
+    if get_dropped_feat:
+        return (dropped_feats, candidate_library_.drop(dropped_feats, axis=1))
+    else:
+        return candidate_library_.drop(dropped_feats, axis=1)
+
 
 
 def get_simplified_equation(best_model_df, feature,
