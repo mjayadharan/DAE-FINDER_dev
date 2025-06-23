@@ -7,7 +7,7 @@ If you use DaeFinder for your development or research, please cite the SODAs pap
 ---
 
 ## **Author and Contributors**
-- Manu Jayadharan (Primary Developer)
+- Manu Jayadharan
 - Christina Catlett
 - Arthur Montanari
 - Niall Mangan
