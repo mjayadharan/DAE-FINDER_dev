@@ -53,8 +53,9 @@ Walkthrough notebooks are available in the `Examples/` folder of the repository.
 
 For examples that require additional data (e.g., the power grid example), the data files are included in the GitHub repository. Be sure to download the required datasets from the relevant folders in the repository.
 
-# Dependency (not applicable to all examples)
+# Specific Example-Dependency
 
+- Some example notebooks require specific dependencies.
 - In the power-grid example, Matpower 6.0 (https://matpower.org/download/) is required for the power flow calculation.
 
 ## Known Issues
