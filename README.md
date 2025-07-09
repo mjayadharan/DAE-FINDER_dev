@@ -1,8 +1,8 @@
 # **DaeFinder**
 
-DaeFinder is a Python package designed to discover Differential Algebraic Equations (DAEs) from noisy data using sparse optimization framework. It is based on the **SODAs algorithm** developed by the researchers in the **Mangan Group** at Northwestern University. The associated research paper will soon be available on arXiv, and a link will be provided here once published.
+DaeFinder is a Python package designed to discover Differential Algebraic Equations (DAEs) from noisy data using sparse optimization framework. The packge  is based on the **SODAs algorithm**, which can be found in the publication available here (https://arxiv.org/abs/2503.05993). 
 
-If you use DaeFinder for your development or research, please cite the SODAs paper once it is available.
+If you use DaeFinder for your development or research, please cite the the published version of SODAs paper at (https://arxiv.org/abs/2503.05993). 
 
 ---
 
