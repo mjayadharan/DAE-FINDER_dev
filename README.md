@@ -70,7 +70,7 @@ We welcome contributions to improve DaeFinder! If you are interested in contribu
 
 For any questions, issues, or collaboration inquiries, please contact:
 
-- Manu Jayadharan [manu.jayadharan@gmail.com](mailto:manu.jayadharan@gmail.com)
+- Manu Jayadharan [manu.jayadharan@gmail.com](mailto:manu.jayadharan@gmail.com), [manu.jayadharan@northwestern.edu](mailto:manu.jayadharan@gmail.com)
 - Niall Mangan [niall.mangan@northwestern.edu](mailto:niall.mangan@northwestern.edu)
 - Christina Catlett
 - Arthur Montanari
