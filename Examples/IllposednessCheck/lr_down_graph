@@ -1,0 +1,26 @@
+digraph G {
+	nodesep=0.3 rankdir=TB ranksep=0.6 splines=spline
+	node [fillcolor=white shape=box style="rounded,filled"]
+	subgraph cluster_top {
+		rank=same
+		A
+		B
+		C
+		D
+		A -> B [style=invis weight=100]
+		B -> C [style=invis weight=100]
+		C -> D [style=invis weight=100]
+	}
+	A1 [shape=ellipse]
+	A -> A1
+	A2 [shape=ellipse]
+	A -> A2
+	B1 [shape=ellipse]
+	B -> B1
+	C1 [shape=ellipse]
+	C -> C1
+	C2 [shape=ellipse]
+	C -> C2
+	C3 [shape=ellipse]
+	C -> C3
+}
