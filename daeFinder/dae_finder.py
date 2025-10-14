@@ -504,6 +504,23 @@ def construct_reduced_fit_list(full_feature_name_list, simplified_eqs,
         return relation_in_lib_feat
 
 
+def stols(coefficients, pd_dict = True, threshold=0.1):
+    """
+    Selects features based on a threshold applied to the absolute values of coefficients.
+    
+    Parameters:
+    coefficients (dict): Dictionary of feature names and their corresponding coefficients.
+    threshold (float): Threshold value for selecting features.
+    
+    Returns:
+    list: List of selected feature names.
+    """
+    selected_features = {feature: coef for feature, coef in coefficients.items() if abs(coef) > threshold}
+    if pd_dict:
+        return pd.DataFrame.from_dict(selected_features, orient='index', columns=['Coefficient']) 
+    else:
+        return selected_features
+
 def compare_models_(models_df_1, models_df_2, tol=1.e-5):
     """
     Utility function to compare the structure of two models. Note that model_df_1 and model_df_2
