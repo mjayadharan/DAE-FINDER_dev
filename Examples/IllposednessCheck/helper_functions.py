@@ -181,10 +181,12 @@ def draw_lr_mains_with_vertical_children(
             cl.node(nid)
         g.subgraph(cl)
 
-    if render_to_file:
-        return g.render(filename=filename, format=file_format, cleanup=True)
     out = g.pipe(format=notebook_format.lower())
-    display(SVG(out) if notebook_format.lower()=="svg" else Image(data=out))
+    display(SVG(out) if notebook_format.lower() == "svg" else Image(data=out))
+    saved_path = None
+    if render_to_file:
+        saved_path = g.render(filename=filename, format=file_format, cleanup=True)
+    return saved_path
 
 
 # # ---------- Example ----------
@@ -260,15 +262,23 @@ def QR_with_threshold(A, rank_threshold=1e-3, stable_right=True, verbose=False):
 
     return Q, R, P, L
 
-def draw_relation_map(model_df, redundancy_df, column_name = "Coefficient", eq_lhs_label='Y', true_terms=[], model_threshold=1, redundancy_threshold=0.0001):
+def draw_relation_map(model_df, redundancy_df, column_name = "Coefficient", eq_lhs_label='Y',
+                       true_terms=[], model_threshold=1, redundancy_threshold=0.0001,
+                       children_sort_key = None, render_to_file=False, filename="relation_graph",
+                         file_format="png", notebook_format="svg"):
     assert column_name in model_df.columns, "Column name \"{}\" not in model_df".format(column_name)
     mains = model_df.index[model_df[column_name].abs() > model_threshold]
     mains = mains[np.argsort(model_df.loc[mains, column_name].abs())].tolist()[::-1]
     main_values = [f"{v:.2f}" for v in model_df.loc[mains, column_name]]
-
-    children = {col: redundancy_df.index[redundancy_df[col] > redundancy_threshold].tolist() for col in redundancy_df.columns}
+    if children_sort_key is not None:
+        children = {col: sorted(redundancy_df.index[redundancy_df[col] > redundancy_threshold].tolist(), key=children_sort_key) for col in redundancy_df.columns}
+    else:
+        children = {col: redundancy_df.index[redundancy_df[col] > redundancy_threshold].tolist() for col in redundancy_df.columns}
    
-    return draw_lr_mains_with_vertical_children(mains, children, main_values=main_values, highlight_nodes=true_terms, left_label=eq_lhs_label, notebook_format="svg")
+    return draw_lr_mains_with_vertical_children(mains, children, main_values=main_values,
+                                                 highlight_nodes=true_terms,left_label=eq_lhs_label,
+                                                   render_to_file=render_to_file, filename=filename,
+                                                   file_format=file_format, notebook_format=notebook_format)
 
 # # --------------------------- Test / demo for QR_with_threshold---------------------------
 # if __name__ == "__main__":
@@ -321,3 +331,86 @@ def draw_relation_map(model_df, redundancy_df, column_name = "Coefficient", eq_l
 #         print("Residual norm of right (dependent) block:", residual_right)
 
 #         print(A.shape)
+
+
+import subprocess, shutil
+from pathlib import Path
+
+def images_to_mp4_ffmpeg(folder, stem, k, m, fps=24, out_path=None, crf=18, bitrate=None):
+    """
+    Combine images named <stem>_<ind>.png for ind=k..m into an MP4.
+    More robust: auto-detects zero padding and forces even dimensions.
+    """
+    folder = Path(folder)
+    out_path = Path(out_path) if out_path else folder / f"{stem}.mp4"
+
+    # 0) sanity
+    if shutil.which("ffmpeg") is None:
+        raise RuntimeError("ffmpeg not found on PATH. Install ffmpeg or add it to PATH.")
+
+    # 1) detect zero-padding width
+    #    try unpadded, then %01d..%06d until we find an existing first frame
+    first_exists = (folder / f"{stem}_{k}.png").exists()
+    if first_exists:
+        pattern = str(folder / f"{stem}_%d.png")
+    else:
+        pad_width = None
+        for w in range(1, 7):
+            if (folder / f"{stem}_{str(k).zfill(w)}.png").exists():
+                pad_width = w
+                break
+        if pad_width is None:
+            raise FileNotFoundError(
+                f"Could not find first frame for k={k}. "
+                f"Tried: {folder / f'{stem}_{k}.png'} and zero-padded up to 6 digits."
+            )
+        pattern = str(folder / f"{stem}_%0{pad_width}d.png")
+
+    frame_count = m - k + 1
+    if frame_count <= 0:
+        raise ValueError("m must be >= k.")
+
+    # 2) Video filter chain:
+    #    - ensure even width/height (prevents x264 aborts on odd dims)
+    #    - set output pixel format via -pix_fmt (already in args)
+    vf = "scale=trunc(iw/2)*2:trunc(ih/2)*2"
+
+    cmd = [
+        "ffmpeg",
+        "-y",
+        "-loglevel", "error",         # keep output clean; change to 'info' if debugging
+        "-framerate", str(fps),       # input framerate
+        "-start_number", str(k),
+        "-i", pattern,                # detected sequence pattern
+        "-frames:v", str(frame_count),
+        "-vf", vf,                    # ensure even dimensions
+        "-c:v", "libx264",
+        "-pix_fmt", "yuv420p",
+    ]
+
+    # quality control: either CRF or a target bitrate
+    if bitrate:
+        cmd += ["-b:v", str(bitrate)]
+    else:
+        cmd += ["-crf", str(crf)]
+
+    cmd += [str(out_path)]
+
+    try:
+        # run and surface stderr if something goes wrong
+        subprocess.run(cmd, check=True, capture_output=True, text=True)
+    except subprocess.CalledProcessError as e:
+        # give helpful diagnostics
+        msg = [
+            "ffmpeg failed.",
+            f"Command: {' '.join(cmd)}",
+            f"---- stderr ----\n{e.stderr}\n-----------------",
+            "Common fixes:",
+            " • Make sure all frames exist and are contiguous from k..m.",
+            " • Ensure all frames are the same size.",
+            " • If frames have alpha or odd dimensions, the -vf scale=... step above handles it.",
+            " • If your images are zero-padded, the function now detects that automatically.",
+        ]
+        raise RuntimeError("\n".join(msg)) from e
+
+    return out_path

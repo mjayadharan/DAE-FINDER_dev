@@ -504,7 +504,7 @@ def construct_reduced_fit_list(full_feature_name_list, simplified_eqs,
         return relation_in_lib_feat
 
 
-def stols(coefficients, pd_dict = True, threshold=0.1):
+def stols(coefficients, pd_dict = True, dominant_balance=False, threshold=0.1):
     """
     Selects features based on a threshold applied to the absolute values of coefficients.
     
@@ -515,6 +515,9 @@ def stols(coefficients, pd_dict = True, threshold=0.1):
     Returns:
     list: List of selected feature names.
     """
+    coef_vect_l2 = np.linalg.norm(list(coefficients.values()), 2)
+    if dominant_balance:
+        threshold = threshold * coef_vect_l2
     selected_features = {feature: coef for feature, coef in coefficients.items() if abs(coef) > threshold}
     if pd_dict:
         return pd.DataFrame.from_dict(selected_features, orient='index', columns=['Coefficient']) 
@@ -1101,7 +1104,7 @@ class sequentialThLin(MultiOutputMixin, RegressorMixin):
         self.feature_names_in_ = None
         self.intercept_ = 0.0
 
-    def fit(self, X, y=None, solver="auto"):
+    def fit(self, X, y=None, dominant_balance = False, solver="auto"):
 
         # num_features = X.columns.shape[0]
         # coef_ind = np.zeros(num_features)
@@ -1116,9 +1119,14 @@ class sequentialThLin(MultiOutputMixin, RegressorMixin):
         for ind in range(self.max_iter_thresh):
             self.model.fit(X=X_ind, y=y)
             coef_ind = self.model.coef_
+            coef_norm = np.linalg.norm(coef_ind, 2)
             self.coef_history_df_pre_thesh.loc[ind] = dict(zip(self.model.feature_names_in_, self.model.coef_))
             # non_sparse_index = np.ones(coef_ind.shape)
-            sparse_index = abs(coef_ind) < self.coef_threshold
+            if dominant_balance:
+                threshold = self.coef_threshold * coef_norm
+            else:
+                threshold = self.coef_threshold
+            sparse_index = abs(coef_ind) < threshold
             coef_ind[sparse_index] = 0.0
             self.coef_history_df.loc[ind] = dict(zip(self.model.feature_names_in_, coef_ind))
             self.intercept_history_df.loc[ind]= {"1": self.model.intercept_}
