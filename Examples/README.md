@@ -12,4 +12,4 @@ with:
 from daeFinder import *..
 ```
 
-unless you have cloned the repository and are running the notebook from within the repository directory.
+If you have cloned the repository and are running the notebook from within the repository directory no changes needed.
