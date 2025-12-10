@@ -10,6 +10,7 @@ If you use DaeFinder for your development or research, please cite the the publi
 - Manu Jayadharan
 - Christina Catlett
 - Arthur Montanari
+- Grace Hooper
 - Niall Mangan
 ---
 
