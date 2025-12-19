@@ -1,0 +1,252 @@
+%% Testing the model structure identification performance after parameter estimation
+% Parameter estimation of K in the structure-preserving power grid model:
+%   - multiple experiments (persistent excitation)
+%   - phase-only residuals
+%   - symmetric K (one parameter per undirected edge)
+%   - ode45 for speed
+
+clear; clc; close all;
+addpath([pwd,'/MATPOWER_power_grids/'])
+
+%% Build ground-truth SP model
+knob.gamma = 1;
+matcase    = 'caseI_4bus2gen';
+
+mpc = feval(matcase);
+mpc.ref_freq = 60;
+
+if knob.gamma == 0
+    mpc.branch(:,3) = 0;
+    disp('Warning: gamma = 0 (lossless)')
+end
+
+[p, details] = SP_model(mpc);
+wref  = p.omega_R;
+H     = p.H;
+D     = p.D;
+A     = p.A;
+Ktrue = p.K;
+gamma = full(p.gamma);
+
+ng = details.ngi;
+nl = details.nl;
+N  = 2*ng + nl;
+n  = 3*ng + nl;
+
+% remove diagonal
+Ktrue = Ktrue .* (ones(N) - eye(N));
+
+% Time grid for all experiments
+t0 = 0;
+tf = 2.0;
+dt = 0.001;                % sampling step (ode45 uses adaptive internals)
+tspan = (t0:dt:tf).';      % column vector
+T = numel(tspan);
+
+%% Ground-truth initial condition (consistent with SP model)
+%     x = [gen phases; gen freqs; load phases; extra load states]
+phi0 = p.phi;            % generator phases (ng x 1)
+
+x0_true = [phi0;         % generator phases
+           zeros(ng,1);  % generator frequencies
+           phi0;         % load phases
+           zeros(nl,1)]; % extra load states
+
+
+%% Generate data from multiple experiments (persistent excitation)
+Nexp     = 5;      % number of experiments
+pert_std = 0.2;    % perturbation std
+
+x0_all     = zeros(n, Nexp);   % initial conditions for each experiment
+x_data_all = cell(Nexp, 1);    % each cell: n x T
+
+for e = 1:Nexp
+    if e == 1
+        x0 = x0_true;
+    else
+        % random perturbation to excite dynamics
+        x0 = x0_true + [pert_std*randn(ng,1);   % gen phases
+                        pert_std*randn(ng,1);   % gen freqs
+                        pert_std*randn(ng,1);   % load phases
+                        pert_std*randn(nl,1)];  % extra load states
+    end
+
+    x0_all(:, e) = x0;
+
+    [t_e, x_e] = simulate_SP_ode45(t0, tf, tspan, x0, ...
+                                   N, ng, nl, ...
+                                   wref, Ktrue, H, A, D, gamma);
+    x_data_all{e} = x_e;   % n x T
+end
+
+%% Sparsity pattern S and parameterization (one per undirected edge)
+% Set the desired S_struct
+
+% True model
+% S_struct = double(Ktrue ~= 0);            % 1 where an edge exists
+
+% False model 30dB
+S_struct = [0 0 1 1 0 0;
+            0 0 0 1 0 0;
+            1 0 0 0 1 1;
+            0 1 0 1 1 1;
+            0 0 1 1 0 0;
+            0 0 1 1 0 0]
+
+% False model 20dB
+S_struct = [0 0 1 1 1 1;
+            0 0 1 1 1 1;
+            1 1 0 0 0 1;
+            0 1 1 1 0 1;
+            0 1 0 1 0 1 ;
+            0 1 1 1 1 0]
+
+S_struct = S_struct .* (ones(N) - eye(N));% zero diagonal
+
+% Use only upper triangle i<j for parameterization (symmetric K)
+S_upper = triu(S_struct, 1);
+idxK    = find(S_upper);                  % parameters live here
+npar    = numel(idxK);
+
+S = S_struct;                             % full symmetric sparsity
+
+% Initial guess for parameters
+theta0 = 0.1 * abs(randn(npar, 1));
+lb = zeros(npar, 1);
+ub = Inf(npar, 1);
+
+%% Pack info into est struct
+est.N        = N;
+est.ng       = ng;
+est.nl       = nl;
+est.n        = n;
+est.wref     = wref;
+est.H        = H;
+est.A        = A;
+est.D        = D;
+est.gamma    = gamma;
+est.tspan    = tspan;
+est.Nexp     = Nexp;
+est.x0_all   = x0_all;
+est.x_data_all = x_data_all;
+est.S        = S;
+est.idxK     = idxK;
+
+%% Nonlinear least squares using PHASE-ONLY residual
+opts = optimoptions('lsqnonlin', ...
+    'Display', 'iter', ...
+    'MaxIterations', 40, ...
+    'MaxFunctionEvaluations', 500, ...
+    'StepTolerance', 1e-8, ...
+    'FunctionTolerance', 1e-8);
+
+res_fun = @(theta) K_residual_phase_ode45(theta, est);
+
+[theta_hat, resnorm, residual, exitflag, output] = ...
+    lsqnonlin(res_fun, theta0, lb, ub, opts);
+
+fprintf('\nFinished. Exitflag = %d, final resnorm = %.3e\n', ...
+        exitflag, resnorm);
+
+%% Reconstruct estimated K (symmetric, with sparsity S)
+
+K_est = zeros(N);
+K_est(idxK) = theta_hat;   % fill upper triangle entries
+K_est = K_est + K_est.';   % symmetric
+K_est = K_est .* S;        % enforce sparsity
+
+
+%% Validation: simulate true vs est from same initial condition
+[t_true, x_true_val] = simulate_SP_ode45(t0, tf, tspan, x0_true, ...
+                                         N, ng, nl, ...
+                                         wref, Ktrue, H, A, D, gamma);
+[t_est,  x_est_val]  = simulate_SP_ode45(t0, tf, tspan, x0_true, ...
+                                         N, ng, nl, ...
+                                         wref, K_est,  H, A, D, gamma);
+
+phi_true = [x_true_val(1:ng,:); ...
+            x_true_val(2*ng+1 : 2*ng + ng + nl, :)];
+phi_est  = [x_est_val(1:ng,:); ...
+            x_est_val(2*ng+1 : 2*ng + ng + nl, :)];
+
+%% Plots
+figure;
+subplot(1,2,1)
+plot(t_true, phi_true.')
+title('TRUE phases')
+xlabel('t [s]'); ylabel('\theta_i [rad]')
+
+subplot(1,2,2)
+plot(t_est, phi_est.')
+title('EST phases')
+xlabel('t [s]'); ylabel('\theta_i [rad]')
+
+sgtitle('Phase trajectories: TRUE vs IDENTIFIED K (ode45, symmetric)')
+
+
+%% FUNCTION
+
+function r = K_residual_phase_ode45(theta, est)
+%   Residual comparing only phases (generators + loads)
+%   across multiple experiments, using ode45 integration.
+
+    N   = est.N;
+    ng  = est.ng;
+    nl  = est.nl;
+    S   = est.S;
+    idx = est.idxK;
+
+    % Reconstruct symmetric K from theta (one parameter per undirected edge)
+    K = zeros(N);
+    K(idx) = theta;     % fill upper triangle (i<j)
+    K = K + K.';        % mirror to lower triangle
+    K = K .* S;         % enforce sparsity exactly
+
+    r_all = [];
+
+    for e = 1:est.Nexp
+        x0     = est.x0_all(:, e);      % n x 1
+        x_data = est.x_data_all{e};     % n x T
+
+        % Simulate with current K
+        [~, x_model] = simulate_SP_ode45( ...
+            est.tspan(1), est.tspan(end), est.tspan, ...
+            x0, est.N, est.ng, est.nl, ...
+            est.wref, K, est.H, est.A, est.D, est.gamma);
+
+        % Extract phases (generators + loads) from data and model
+        phi_data  = [x_data(1:ng,:); x_data(2*ng+1 : 2*ng+ng+nl, :)];
+        phi_model = [x_model(1:ng,:); x_model(2*ng+1 : 2*ng+ng+nl, :)];
+
+        diff_e = phi_model - phi_data;     % (ng + ng + nl) x T
+
+        r_all = [r_all; diff_e(:)];        % stack as long vector
+    end
+
+    r = r_all;
+end
+
+function [t_uniform, x_uniform] = simulate_SP_ode45(t0, tf, tspan, x0, ...
+                                                    N, ng, nl, ...
+                                                    wref, K, H, A, D, gamma)
+%   Simulate SP model using ode45 and interpolate to tspan.
+%
+%   tspan : desired uniform grid (column vector)
+%   x0    : initial condition (n x 1)
+%   Returns:
+%      t_uniform : same as tspan
+%      x_uniform : n x length(tspan)
+
+    n = 3*ng + nl;
+
+    ode = @(t,x) kuramotoPG_SP(t, x, N, ng, ng, nl, ...
+                               wref, K, H, A, D, gamma, ...
+                               zeros(n,1), 0);
+
+    opts = odeset('RelTol',1e-7, 'AbsTol',1e-8);
+    [t_raw, x_raw] = ode45(ode, [t0 tf], x0, opts);  % t_raw: [T_raw x 1], x_raw: [T_raw x n]
+
+    % Interpolate onto uniform tspan
+    x_uniform = interp1(t_raw, x_raw, tspan, 'linear')';  % n x T
+    t_uniform = tspan(:);
+end
