@@ -1,9 +1,21 @@
-# **DaeFinder**
+## DaeFinder
 
-DaeFinder is a Python package designed to discover Differential Algebraic Equations (DAEs) from noisy data using sparse optimization framework. The packge  is based on the **SODAs algorithm**, which can be found in the publication available here (https://arxiv.org/abs/2503.05993). 
+**DaeFinder** is a Python-based Scientific ML package for discovering **Differential Algebraic Equations (DAEs)** from noisy data using a sparse optimization framework. The package is based on the **SODAs algorithm**, described in the accompanying publication: https://arxiv.org/abs/2503.05993.
 
-If you use DaeFinder for your development or research, please cite the the published version of SODAs paper at (https://arxiv.org/abs/2503.05993). 
+### Model-agnostic and extensible design
 
+A key design principle of DaeFinder is that it is **model-agnostic**. Any fitting statistical or machine-learning method can be used to fit algebraic and differential equations, as long as it conforms to the package’s abstract interface by implementing the required `fit()` and `score()` methods. This makes it easy to integrate linear models, nonlinear regressors, probabilistic models, or fully custom estimators without modifying the core code.
+
+DaeFinder is also **modular and extensible**, allowing you to:
+- Define **custom model classes** for representing algebraic or differential equation structures
+- Use **custom optimizers** in place of the default sparse optimization routines
+- Mix and match **fitting strategies** and **scoring metrics** depending on the application
+
+### Citation
+
+If you use DaeFinder for development or research, please cite the SODAs paper:
+
+- https://arxiv.org/abs/2503.05993
 ---
 
 ## **Author and Contributors**
@@ -12,6 +24,8 @@ If you use DaeFinder for your development or research, please cite the the publi
 - Arthur Montanari
 - Grace Hooper
 - Niall Mangan
+- Finn Hagerty
+- Yuxiang Feng
 ---
 
 ## **Features**
@@ -74,5 +88,3 @@ For any questions, issues, or collaboration inquiries, please contact:
 
 - Manu Jayadharan [manu.jayadharan@gmail.com](mailto:manu.jayadharan@gmail.com), [manu.jayadharan@northwestern.edu](mailto:manu.jayadharan@gmail.com)
 - Niall Mangan [niall.mangan@northwestern.edu](mailto:niall.mangan@northwestern.edu)
-- Christina Catlett
-- Arthur Montanari
