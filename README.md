@@ -78,7 +78,7 @@ For examples that require additional data (e.g., the power grid example), the da
 - The parallel function currently has some bugs that need fixing.
 - If you encounter issues with the installation or the package itself, please feel free to contact the authors or contributors.
 
-## Contributing
+## Contribute
 
 We welcome contributions to improve DaeFinder! If you are interested in contributing to the package or working on related research, please reach out to the author or the Mangan Group.
 
