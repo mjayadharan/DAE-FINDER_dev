@@ -1,0 +1,342 @@
+\documentclass[11pt]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{enumitem}
+\usepackage{hyperref}
+\hypersetup{colorlinks=true,linkcolor=blue!50!black,urlcolor=blue!50!black}
+
+\definecolor{codebg}{rgb}{0.96,0.96,0.94}
+\definecolor{kw}{rgb}{0.0,0.2,0.6}
+\definecolor{cmt}{rgb}{0.3,0.5,0.3}
+\definecolor{str}{rgb}{0.6,0.1,0.1}
+\definecolor{fail}{rgb}{0.7,0.0,0.0}
+\definecolor{pass}{rgb}{0.0,0.5,0.0}
+
+\lstset{
+  basicstyle=\ttfamily\footnotesize,
+  backgroundcolor=\color{codebg},
+  keywordstyle=\color{kw}\bfseries,
+  commentstyle=\color{cmt}\itshape,
+  stringstyle=\color{str},
+  language=Python,
+  showstringspaces=false,
+  breaklines=true,
+  frame=single,
+  framesep=4pt,
+  numbers=none,
+  columns=fullflexible,
+}
+
+\newcommand{\code}[1]{\texttt{\small #1}}
+\newcommand{\PASS}{\textcolor{pass}{\textbf{PASS}}}
+\newcommand{\FAIL}{\textcolor{fail}{\textbf{FAIL}}}
+
+\title{\textbf{DaeFinder: Python 3.14 / NumPy 2 / pandas 3 / scikit-learn 1.9\\
+Compatibility Audit and Release Plan}}
+\author{Compatibility audit --- \texttt{daeFinder} package}
+\date{2026-06-23}
+
+\begin{document}
+\maketitle
+
+\section{Executive summary}
+
+The \code{daeFinder} package (\code{v0.2.1}) was tested against the \emph{latest}
+Python scientific stack and the current production stack. Every public function
+(22) and class (4) in \code{daeFinder/dae\_finder.py} was exercised with realistic
+enzyme-kinetics data under both environments.
+
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+ & \textbf{Baseline (works today)} & \textbf{Latest (target)} \\
+\midrule
+Python      & 3.11.7   & \textbf{3.14.5} \\
+NumPy       & 1.26.4   & 2.5.0 \\
+pandas      & 2.3.3    & 3.0.3 \\
+SymPy       & 1.12     & 1.14.0 \\
+scikit-learn& (1.4 era)& 1.9.0 \\
+\midrule
+Harness result & 25 / 29 \PASS{} & 24 / 29 \PASS{} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\textbf{Three independent, confirmed incompatibilities} break the package on the
+latest stack. The user's hypothesis was correct: \code{exec()} is the largest
+cause, but it is not because \code{exec} was ``removed'' --- it still exists.
+Rather, \textbf{Python 3.13+ changed how \code{exec()} interacts with function
+local variables (PEP 667)}, which silently breaks the specific way this package
+uses it. Two further breakages come from \textbf{pandas 3.0} (copy-on-write) and
+\textbf{scikit-learn $\ge$1.7} (a removed method).
+
+\begin{enumerate}[itemsep=2pt]
+  \item \textbf{[I1] \code{exec()} into function locals (Python 3.13+, PEP 667).}
+        \code{get\_refined\_lib} and \code{get\_simplified\_equation} create
+        SymPy symbols with one \code{exec()} call and read them back in a later
+        \code{exec()} call. Since Python 3.13 the second call can no longer see
+        the names $\Rightarrow$ \code{NameError}.
+  \item \textbf{[I2] pandas 3.0 copy-on-write read-only arrays.}
+        \code{get\_simplified\_equation} mutates \code{df[col].values} in place;
+        under pandas 3.0 that array is read-only $\Rightarrow$
+        \code{ValueError: assignment destination is read-only}.
+  \item \textbf{[I3] scikit-learn removed \code{BaseEstimator.\_validate\_data}.}
+        \code{FeatureCouplingTransformer.transform} calls
+        \code{self.\_validate\_data(...)}; removed in scikit-learn 1.7
+        $\Rightarrow$ \code{AttributeError}.
+\end{enumerate}
+
+All three fixes were prototyped and verified to pass on \emph{both} Python 3.11
+and 3.14 (Section~\ref{sec:fixes}). Two minor latent defects (Section~\ref{sec:minor})
+should be swept up in the same release.
+
+\medskip
+\noindent\fbox{\parbox{0.98\linewidth}{\textbf{Implementation status (branch
+\code{fix/py314-compat}).} All fixes in this report are \emph{implemented}. A pytest
+suite (\code{tests/test\_py314\_compat.py}) proves the new implementations are
+numerically identical to the originals (equivalence tests run on Python $<$3.13,
+where the original \code{exec} pattern still works) and that the new code runs on
+Python 3.13+. Results: \textbf{Python 3.14} (NumPy~2.5 / pandas~3.0 /
+scikit-learn~1.9) 13 passed, 4 skipped; \textbf{Python 3.11} 17 passed. The changes
+passed a multi-agent adversarial critique loop with no surviving regressions. A
+GitHub Actions matrix (Python 3.9--3.14) and the \code{v0.3.0} version bump are
+included.}}
+
+\section{Test methodology}
+
+A dedicated Python 3.14.5 virtual environment was created and the full dependency
+set (\code{numpy scipy pandas sympy scikit-learn matplotlib joblib}) was installed
+from current wheels; the package was installed editable. A harness exercised every
+public symbol of \code{dae\_finder.py} with a realistic Michaelis--Menten data
+matrix (data generation $\to$ polynomial library $\to$ algebraic-model fitting $\to$
+library refinement $\to$ equation simplification). The identical harness was run
+under Python 3.11.7 to obtain a clean differential. Only the four functions below
+diverge between the two environments; everything else passes on both.
+
+\section{Detailed findings}
+
+\subsection*{[I1] \code{exec()} into function-local namespace --- Python 3.13+ (PEP 667)}
+
+\textbf{Locations:} \code{dae\_finder.py:317,323} (\code{get\_refined\_lib});
+\code{dae\_finder.py:399,419,420} (\code{get\_simplified\_equation}).\\
+\textbf{Symptom on 3.14:} \code{NameError: name 'S' is not defined}.\\
+\textbf{Transitively affected:} \code{get\_refined\_lib\_stable} (falls back to
+\code{get\_refined\_lib} whenever feature names contain brackets such as
+\code{[S]}); \code{get\_simplified\_equation\_list} (calls
+\code{get\_simplified\_equation}).
+
+The pattern is:
+\begin{lstlisting}
+exec(feat_list_str + "= sympy.symbols(" + str(feat_list) + ")")  # creates S, E, ...
+...
+exec("candid_feat_dict['{}'] = {}".format(feat1, feat2))         # reads S, E, ...
+\end{lstlisting}
+
+\textbf{Root cause.} Before Python 3.13, a bare \code{exec(code)} inside a function
+wrote into, and read from, a shared view of the frame's fast locals, so names
+created by one call were visible to the next. PEP 667 (Python 3.13) made
+\code{locals()} in optimized scopes return an \emph{independent snapshot}; names
+written by \code{exec()} no longer persist into the frame and are invisible to a
+subsequent \code{exec()}. Minimal reproduction:
+
+\begin{lstlisting}
+def pattern():
+    exec("a, b = 10, 3")     # like exec("S, ES = sympy.symbols(...)")
+    d = {}
+    exec("d['x'] = a*b")     # NameError on 3.13+ : name 'a' is not defined
+    return d['x']
+\end{lstlisting}
+
+\begin{center}\small
+Python 3.11 / 3.12: \PASS{} $\to$ 30 \qquad Python 3.14: \FAIL{} \code{NameError: name 'a' is not defined}
+\end{center}
+
+The source already carries a warning docstring on \code{get\_refined\_lib}
+(``\emph{doesn't work for compiled version of python because of the use of exec()}'')
+and a partial replacement, \code{get\_refined\_lib\_stable}. That replacement is
+the right idea but is incomplete: it explicitly delegates back to the broken
+\code{get\_refined\_lib} for any bracketed feature names, and the equation-
+simplification path has no stable variant at all.
+
+\subsection*{[I2] pandas 3.0 copy-on-write: read-only \code{.values}}
+
+\textbf{Location:} \code{dae\_finder.py:408--410} (\code{get\_simplified\_equation}).\\
+\textbf{Symptom on pandas 3.0:} \code{ValueError: assignment destination is read-only}.\\
+This breakage is driven by \textbf{pandas $\ge$3.0}, independent of the Python
+version. Code:
+\begin{lstlisting}
+model_coefs = best_model_df[model_lhs].values   # read-only view under pandas 3.0 CoW
+model_coefs[abs(model_coefs) < coef_threshold] = 0   # ValueError
+\end{lstlisting}
+pandas 3.0 makes copy-on-write the default; \code{Series.values} now returns a
+non-writable array. Minimal reproduction confirmed:
+\begin{lstlisting}
+vals = pd.DataFrame({"x":[0.001,0.5]})["x"].values
+vals[abs(vals) < 0.1] = 0   # ValueError: assignment destination is read-only
+\end{lstlisting}
+A repo-wide scan found this is the \emph{only} in-place \code{.values} mutation;
+all other \code{.values} usages are reads and are safe.
+
+\subsection*{[I3] scikit-learn removed \code{BaseEstimator.\_validate\_data}}
+
+\textbf{Location:} \code{dae\_finder.py:727} (\code{FeatureCouplingTransformer.transform}).\\
+\textbf{Symptom on scikit-learn 1.9:}
+\code{AttributeError: 'FeatureCouplingTransformer' object has no attribute '\_validate\_data'}.\\
+The \code{\_validate\_data} \emph{method} was deprecated in scikit-learn 1.6 and
+removed in 1.7; it is replaced by the module-level function
+\code{sklearn.utils.validation.validate\_data(estimator, X, ...)}. Confirmed:
+\code{hasattr(BaseEstimator, '\_validate\_data') == False} on 1.9.
+
+\subsection{Harness differential (the four divergent tests)}
+
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+\textbf{Test} & \textbf{Python 3.11} & \textbf{Python 3.14} \\
+\midrule
+\code{get\_refined\_lib} (exec)            & \PASS{} & \FAIL{} \code{NameError} [I1] \\
+\code{get\_simplified\_equation} (exec/CoW)& (latent, see \S\ref{sec:minor}) & \FAIL{} \code{ValueError} [I2]+[I1] \\
+\code{get\_simplified\_equation\_list}     & (latent) & \FAIL{} [I2]+[I1] \\
+\code{FeatureCouplingTransformer.transform}& \PASS{} & \FAIL{} \code{AttributeError} [I3] \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\noindent The remaining 25 tests (data generation, smoothing, derivative matrices,
+\code{PolyFeatureMatrix}, \code{AlgModelFinder} fit/score/predict,
+\code{sequentialThLin}, \code{stols}, \code{compare\_models\_}, etc.) pass
+identically on both stacks.
+
+\section{Blast radius across the repository}
+
+The shipped package is the only artifact that must be fixed for a release, but the
+same defect is replicated widely throughout the examples, which informs the
+documentation/example refresh:
+
+\begin{itemize}[itemsep=2pt]
+  \item \textbf{40 example notebooks + 1 template} reference the broken functions
+        (\code{get\_refined\_lib}, \code{get\_simplified\_equation},
+        \code{FeatureCouplingTransformer}).
+  \item \textbf{$\sim$29 notebooks} contain the \emph{inline} copy-pasted
+        \code{exec(feat\_list\_str + ...)} pattern in their own cells --- i.e. the
+        bug is duplicated directly in notebook code, not only via the package.
+  \item \textbf{45 notebooks} import a \emph{vendored local copy} of
+        \code{dae\_finder.py} (\code{from dae\_finder import ...}) rather than the
+        installed package; several of these copies
+        (e.g. under \code{SODAs paper experiments/}) contain up to 7 \code{exec()}
+        calls and carry the same defect.
+  \item Only \textbf{16 notebooks} import the installed package
+        (\code{import daeFinder}); these will be fixed automatically by the package
+        fix.
+\end{itemize}
+
+\noindent Running all 194 notebooks ($59$ examples $+$ $134$ backups $+$ $1$
+template) end-to-end is out of scope and infeasible (many require large external
+data, including pendulum video assets, and long compute). The static blast-radius
+map above is the actionable substitute.
+
+\section{Proposed fixes (prototyped and verified)}
+\label{sec:fixes}
+
+All three fixes were implemented as standalone prototypes and pass on
+\textbf{both} Python 3.11 (NumPy 1.26 / pandas 2.3) and Python 3.14
+(NumPy 2.5 / pandas 3.0). They are backward- and forward-compatible.
+
+\paragraph{Fix I1 --- eliminate \code{exec}-into-locals.}
+Replace the two-stage \code{exec()} dance with an explicit symbol map plus
+\code{sympy.sympify}. No \code{exec} at all; identical SymPy objects.
+\begin{lstlisting}
+clean = remove_paranth_from_feat(list(data_matrix_df_.columns))
+sym_map = dict(zip(clean, sympy.symbols(clean)))
+candid_strs = remove_paranth_from_feat(poly_to_scipy(candidate_library_.columns))
+candid_feat_dict = {raw: sympy.sympify(s, locals=sym_map)
+                    for raw, s in zip(candidate_library_.columns, candid_strs)}
+\end{lstlisting}
+This is exactly the technique already present in \code{get\_refined\_lib\_stable};
+it simply needs to handle the bracketed-name case (via \code{remove\_paranth\_from\_feat})
+so the broken \code{get\_refined\_lib} can be retired. The same pattern fixes the
+\code{lhs}/\code{rhs} construction in \code{get\_simplified\_equation}.
+\emph{(If a minimal-diff change is preferred, passing an explicit namespace dict as
+the second argument to \code{exec}/\code{eval} also works on all versions; the
+\code{sympify} route is cleaner and is recommended.)}
+
+\paragraph{Fix I2 --- writable coefficient array.}
+\begin{lstlisting}
+model_coefs = best_model_df[model_lhs].to_numpy(dtype=float, copy=True)
+model_coefs[abs(model_coefs) < coef_threshold] = 0
+\end{lstlisting}
+As a bonus, the \code{sympify} route in Fix~I1 also removes a pre-existing latent
+crash where \code{NaN} coefficients produced \code{NameError: name 'nan' is not defined}.
+
+\paragraph{Fix I3 --- version-tolerant validation shim.}
+\begin{lstlisting}
+try:
+    from sklearn.utils.validation import validate_data      # sklearn >= 1.6
+    X = validate_data(self, X, order="F", dtype=FLOAT_DTYPES,
+                      reset=False, accept_sparse=("csr","csc"))
+except ImportError:
+    X = self._validate_data(X, order="F", dtype=FLOAT_DTYPES,   # sklearn < 1.6
+                            reset=False, accept_sparse=("csr","csc"))
+\end{lstlisting}
+
+\section{Minor / latent defects (fix in the same release)}
+\label{sec:minor}
+
+\begin{enumerate}[itemsep=2pt]
+  \item \textbf{\code{dae\_finder.py:264} --- \code{raise "Smoothening type not supported"}.}
+        Raising a string has been a \code{TypeError} since Python 3.0; it only
+        triggers on an unsupported \code{smooth\_method}. Change to
+        \code{raise ValueError("Smoothening type not supported")}.
+  \item \textbf{\code{sequentialThLin.\_\_init\_\_} (lines $\sim$1043--1053) ---
+        trailing-comma tuples.} Statements like \code{self.alpha = alpha,} store a
+        1-tuple instead of a scalar (likewise \code{l1\_ratio}, \code{fit\_intercept},
+        \code{tol}, \code{selection}, \dots). The model still works because the real
+        arguments flow through \code{input\_arg\_dict}, but this breaks
+        scikit-learn \code{get\_params}/\code{clone} conventions. Remove the stray
+        commas.
+  \item \textbf{Soft risk --- private scikit-learn import.}
+        \code{from sklearn.utils.validation import \_check\_feature\_names\_in}
+        uses a private symbol; it works on 1.9 but could move. Track for a future
+        release.
+  \item \textbf{Packaging metadata.} \code{setup.py} declares
+        \code{python\_requires=">=3.7"} with fully unpinned dependencies. After the
+        fixes, declare a tested floor (e.g. Python $\ge$3.9) and verified bounds
+        for NumPy/pandas/scikit-learn, and update the trove classifiers.
+\end{enumerate}
+
+\section{Release plan}
+
+\begin{enumerate}[itemsep=3pt]
+  \item \textbf{Branch.} \code{fix/py314-compat} off \code{main}.
+  \item \textbf{Patch \code{daeFinder/dae\_finder.py}:} apply Fix~I1 (retire/redirect
+        \code{get\_refined\_lib}; rewrite \code{get\_simplified\_equation}),
+        Fix~I2, Fix~I3, plus the two minor defects in \S\ref{sec:minor}.
+  \item \textbf{Regression tests.} Commit the smoke harness as a proper
+        \code{tests/} suite (pytest), asserting numerical equality of refined
+        libraries and simplified equations between the old and new
+        implementations on a fixed dataset, so behavior is provably preserved.
+  \item \textbf{Multi-version CI.} Add a GitHub Actions matrix
+        (Python 3.9 / 3.11 / 3.12 / 3.13 / 3.14) running the test suite, so this
+        class of regression is caught automatically.
+  \item \textbf{Packaging.} Update \code{setup.py} \code{python\_requires},
+        dependency bounds, classifiers; bump version to \textbf{v0.3.0}
+        (behavior-preserving but a compatibility milestone) and add a CHANGELOG
+        entry.
+  \item \textbf{Examples refresh (follow-up, separate PR).} Repoint the 45
+        notebooks that import vendored \code{dae\_finder.py} copies at the fixed
+        package; replace inline \code{exec(feat\_list\_str + ...)} cells with the
+        fixed API. Treat \code{Back up files/} as archival (out of scope).
+  \item \textbf{Publish.} Build sdist + wheel, smoke-test install in a clean
+        Python 3.14 venv, then release.
+\end{enumerate}
+
+\paragraph{Recommended version.} \textbf{v0.3.0} --- no public API removed and
+results are numerically identical, but it is a meaningful ``now runs on the latest
+Python / NumPy~2 / pandas~3 / scikit-learn~1.9'' milestone.
+
+\end{document}
