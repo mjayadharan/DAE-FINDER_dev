@@ -32,6 +32,21 @@ import matplotlib.pyplot as plt
 from joblib import delayed, Parallel
 
 
+def _validate_data_compat(estimator, X, **kwargs):
+    """Compatibility shim for scikit-learn data validation.
+
+    scikit-learn moved ``BaseEstimator._validate_data`` (a method) to the
+    module-level function ``sklearn.utils.validation.validate_data`` in 1.6 and
+    removed the old method in 1.7. This helper uses the new function when
+    available and falls back to the legacy method on older scikit-learn.
+    """
+    try:
+        from sklearn.utils.validation import validate_data
+    except ImportError:
+        return estimator._validate_data(X, **kwargs)
+    return validate_data(estimator, X, **kwargs)
+
+
 """Data Generation functions
 """
 
@@ -261,7 +276,7 @@ def smooth_data(data_matrix,
         data_matrix_smooth = pd.concat([data_matrix_smooth, smoothened_df], axis=1)
         return data_matrix_smooth
     else:
-        raise "Smoothening type not supported"
+        raise ValueError("Smoothening type not supported")
 
 def remove_paranth_from_feat(feature_list):
     """
@@ -302,8 +317,10 @@ def get_refined_lib(factor_exp, data_matrix_df_, candidate_library_, get_dropped
     Utility function to get the refined library by removing all features in the candidate library which
     has factor_exp as a factor in it.
 
-    ***Warning: This function doesnt work for compiled version of python because of the use of exec() function.
-    If CPython is used, please use get_refined_lib_stable and avoid usage of paranthesis in feature names***
+    Note: this function uses ``exec``/``eval`` with an explicit namespace dictionary so
+    that it works across Python versions, including Python 3.13+ where names created by
+    ``exec`` no longer leak into function locals (PEP 667). For feature names without
+    parenthesis, ``get_refined_lib_stable`` is the preferred, exec-free implementation.
     :param factor_exp: sympy expression eg. S*ES
     :param data_matrix_df_ (pd.DataFrame): data matrix containing all the state variables as column labels
     :param candidate_library_ (pd.DataFrame): candidate library that needs to be refined.
@@ -311,16 +328,18 @@ def get_refined_lib(factor_exp, data_matrix_df_, candidate_library_, get_dropped
     else only the refined library is returned
     :return:
     """
-    # Adding the state variables as scipy symbols
+    # Adding the state variables as scipy symbols inside an explicit namespace so the
+    # symbols remain visible to the subsequent eval() calls on all Python versions.
     feat_list = list(data_matrix_df_.columns)
     feat_list_str = ", ".join(remove_paranth_from_feat(data_matrix_df_.columns))
-    exec(feat_list_str + "= sympy.symbols(" + str(feat_list) + ")")
+    exec_namespace = {"sympy": sympy}
+    exec(feat_list_str + "= sympy.symbols(" + str(feat_list) + ")", exec_namespace)
 
     # Converting the monomials in the candidate library to scipy expressions
     candid_features = remove_paranth_from_feat(poly_to_scipy(candidate_library_.columns))
     candid_feat_dict = {}
     for feat1, feat2 in zip(candidate_library_.columns, candid_features):
-        exec("candid_feat_dict['{}'] = {}".format(feat1, feat2))
+        candid_feat_dict[feat1] = eval(feat2, exec_namespace)
 
     dropped_feats = set()
     if (isinstance(factor_exp, list) or isinstance(factor_exp, set)):
@@ -393,10 +412,13 @@ def get_simplified_equation(best_model_df, feature,
                             intercept_threshold= 0.01,
                             intercept=0, simplified=True):
 
-    # Adding the state variables as scipy symbols
+    # Adding the state variables as scipy symbols inside an explicit namespace so the
+    # symbols remain visible to the subsequent exec() calls on all Python versions
+    # (Python 3.13+ no longer leaks exec-created names into function locals, PEP 667).
     global_feature_list = list(global_feature_list)
     global_feature_list_string = ", ".join(remove_paranth_from_feat(global_feature_list))
-    exec(global_feature_list_string + "= sympy.symbols(" + str(global_feature_list) + ")")
+    exec_namespace = {"sympy": sympy}
+    exec(global_feature_list_string + "= sympy.symbols(" + str(global_feature_list) + ")", exec_namespace)
 
 
     model_lhs = feature
@@ -405,19 +427,32 @@ def get_simplified_equation(best_model_df, feature,
     #Intercept below the threshold is assigned to zero
     intercept = 0 if abs(intercept) < intercept_threshold else intercept
 
-    model_coefs = best_model_df[model_lhs].values
+    # A writable copy is required: pandas >= 3.0 (copy-on-write) returns a read-only
+    # array from ``.values``, so in-place thresholding would raise a ValueError.
+    # ``copy=True`` (without forcing a dtype) preserves the original coefficient dtype,
+    # so integer coefficients keep producing integer-valued symbolic terms as before.
+    model_coefs = best_model_df[model_lhs].to_numpy(copy=True)
     #Coefficients of features in the model below threshold is eliminated
     model_coefs[abs(model_coefs) < coef_threshold] = 0
 
     model_rhs_features = remove_paranth_from_feat(poly_to_scipy(best_model_df[model_lhs].keys()))
 
 
-    rhs_string_sp_string = [str(coef) + "*" + feature for coef, feature in zip(model_coefs, model_rhs_features) ]
+    # Features whose coefficient is NaN are absent from this model's fit (e.g. the
+    # union-indexed frame returned by AlgModelFinder.best_models). Skip them so the
+    # string "nan" never leaks into the symbolic expression. This is a no-op when the
+    # coefficients contain no NaN, preserving behaviour on clean inputs. NaN can only
+    # occur in floating-point arrays, so the np.isnan check is guarded accordingly.
+    coefs_are_float = np.issubdtype(model_coefs.dtype, np.floating)
+    rhs_string_sp_string = [str(coef) + "*" + feature
+                            for coef, feature in zip(model_coefs, model_rhs_features)
+                            if not (coefs_are_float and np.isnan(coef))]
     rhs_string_sp_string = "+".join(rhs_string_sp_string) + "+" + str(intercept)
 
     result_dict = {}
-    exec("result_dict['lhs'] = {}".format(model_lhs_sp_string))
-    exec("result_dict['rhs'] = {}".format(rhs_string_sp_string))
+    exec_namespace["result_dict"] = result_dict
+    exec("result_dict['lhs'] = {}".format(model_lhs_sp_string), exec_namespace)
+    exec("result_dict['rhs'] = {}".format(rhs_string_sp_string), exec_namespace)
 
     if not simplified:
         return result_dict
@@ -724,8 +759,8 @@ class FeatureCouplingTransformer(TransformerMixin, BaseEstimator):
         """
         check_is_fitted(self)
 
-        X = self._validate_data(
-            X, order="F", dtype=FLOAT_DTYPES, reset=False, accept_sparse=("csr", "csc")
+        X = _validate_data_compat(
+            self, X, order="F", dtype=FLOAT_DTYPES, reset=False, accept_sparse=("csr", "csc")
         )
         X_transpose = X.T
         X_coupled = np.vstack([self.coupling_func(X_transpose[i], X_transpose[j], i, j, **self.coupling_func_args)
@@ -1040,17 +1075,17 @@ class sequentialThLin(MultiOutputMixin, RegressorMixin):
         self.coef_threshold = coef_threshold
         self.max_iter_thresh = max_iter_thresh
         self.max_iter_optimizer = max_iter_optimizer
-        self.alpha = alpha,
-        self.l1_ratio = l1_ratio,
-        self.fit_intercept = fit_intercept,
-        self.precompute = precompute,
-        self.copy_X = copy_X,
-        self.tol = tol,
-        self.warm_start = warm_start,
-        self.positive = positive,
-        self.random_state = random_state,
+        self.alpha = alpha
+        self.l1_ratio = l1_ratio
+        self.fit_intercept = fit_intercept
+        self.precompute = precompute
+        self.copy_X = copy_X
+        self.tol = tol
+        self.warm_start = warm_start
+        self.positive = positive
+        self.random_state = random_state
         self.silent = silent
-        self.selection = selection,
+        self.selection = selection
 
         self.input_arg_dict = {"alpha": alpha,
                                "l1_ratio": l1_ratio,
