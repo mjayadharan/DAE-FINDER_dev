@@ -22,9 +22,19 @@ import pytest
 from daeFinder import dae_finder as df
 
 PRE_PEP667 = sys.version_info < (3, 13)
+PANDAS_LT_3 = int(pd.__version__.split(".")[0]) < 3
 skip_old = pytest.mark.skipif(
     not PRE_PEP667,
     reason="original exec()-based implementation cannot run on Python >= 3.13 (PEP 667)",
+)
+# The original get_simplified_equation additionally mutates Series.values in place,
+# which is read-only under pandas >= 3.0 (copy-on-write). Its equivalence tests can
+# therefore only run where BOTH the exec pattern (Python < 3.13) and the in-place
+# mutation (pandas < 3.0) are still supported.
+skip_old_simplified = pytest.mark.skipif(
+    not (PRE_PEP667 and PANDAS_LT_3),
+    reason="original get_simplified_equation needs Python < 3.13 (PEP 667) and "
+           "pandas < 3.0 (writable .values)",
 )
 
 
@@ -169,7 +179,7 @@ def test_get_simplified_equation_does_not_mutate_input(best_model_df):
     assert best_model_df["S E"].tolist() == before
 
 
-@skip_old
+@skip_old_simplified
 def test_get_simplified_equation_equivalence(best_model_df):
     # Each call gets its own fresh copy: the verbatim old impl mutates its input in
     # place, so a shared frame would let one call pollute the next (and make the result
@@ -198,7 +208,7 @@ def test_get_simplified_equation_preserves_integer_coef_dtype():
     assert "Float" not in sympy.srepr(res["rhs"])  # coefficients stay sympy Integers
 
 
-@skip_old
+@skip_old_simplified
 def test_get_simplified_equation_integer_coef_equivalence():
     bm = pd.DataFrame({"S E": [2, 0, 4, 0]}, index=["S^2", "E", "S P", "S"])
     old = old_get_simplified_equation(bm.copy(), "S E", ["S", "E", "ES", "P"],
