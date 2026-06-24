@@ -33,6 +33,17 @@ automatically untangles both directly from time-series data:
 
 ---
 
+## 📝 Citation
+
+If DaeFinder supports your research, please cite the SODAs paper:
+
+> M. Jayadharan, C. Catlett, A. N. Montanari, and N. M. Mangan,
+> *"SODAs: Sparse Optimization for the Discovery of Differential and Algebraic
+> Equations."* Proc. A 1 May 2026; 482 (2337): 20250201. https://doi.org/10.1098/rspa.2025.0201 
+
+---
+
+
 ## 📦 Installation
 
 DaeFinder requires **Python 3.9+**.
@@ -148,27 +159,6 @@ Step-by-step notebooks live in [`Examples/`](Examples/), covering:
 > repository (download the relevant folders). The power-grid example also
 > requires [Matpower 6.0](https://matpower.org/download/) for power-flow
 > calculations.
-
----
-
-## 📝 Citation
-
-If DaeFinder supports your research, please cite the SODAs paper:
-
-> M. Jayadharan, C. Catlett, A. N. Montanari, and N. M. Mangan,
-> *"SODAs: Sparse Optimization for the Discovery of Differential and Algebraic
-> Equations."* arXiv:2503.05993 (2025). https://arxiv.org/abs/2503.05993
-
-```bibtex
-@misc{jayadharan2025sodas,
-  title         = {SODAs: Sparse Optimization for the Discovery of Differential and Algebraic Equations},
-  author        = {Jayadharan, Manu and Catlett, Christina and Montanari, Arthur N. and Mangan, Niall M.},
-  year          = {2025},
-  eprint        = {2503.05993},
-  archivePrefix = {arXiv},
-  primaryClass  = {math.DS}
-}
-```
 
 ---
 
