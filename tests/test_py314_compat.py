@@ -79,23 +79,8 @@ def old_get_simplified_equation(best_model_df, feature, global_feature_list, coe
 
 # --------------------------------------------------------------------------------------
 # Fixtures
+# (mm_data and poly_lib are provided by tests/conftest.py)
 # --------------------------------------------------------------------------------------
-@pytest.fixture
-def mm_data():
-    """Deterministic Michaelis-Menten data matrix (no brackets in names)."""
-    t = np.linspace(0, 5, 80)
-    k_rates = {"k": 1.0, "kr": 0.5, "kcat": 0.3}
-    ic = {"S": 10.0, "E": 1.0, "ES": 0.0, "P": 0.0}
-    sol = df.solveMM(ic, k_rates, t, "ts0")
-    return pd.DataFrame(sol, columns=["S", "E", "ES", "P"])
-
-
-@pytest.fixture
-def poly_lib(mm_data):
-    pf = df.PolyFeatureMatrix(degree=2, include_bias=True)
-    return pf.fit_transform(mm_data)
-
-
 @pytest.fixture
 def best_model_df():
     """Clean best-model frame (no NaN) with non-trivial coefficients to threshold."""

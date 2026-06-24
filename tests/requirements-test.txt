@@ -1,0 +1,5 @@
+# Test dependencies for the daeFinder suite.
+# Install with:  python -m pip install -r tests/requirements-test.txt
+pytest>=7.0
+# Optional: enables a coverage report when running tests/run_tests.sh
+pytest-cov>=4.0
