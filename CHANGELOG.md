@@ -1,5 +1,22 @@
 # Changelog
 
+## [Unreleased]
+### Fixed
+- **`AlgModelFinder.fit(parallelize=True)` data race.** `fit_and_score` fitted the
+  shared `self.model` estimator, so with joblib's `require='sharedmem'` (threading
+  backend) parallel tasks mutated one estimator concurrently — raising nondeterministic
+  `ValueError: feature names should match` (or silently scrambling coefficients). Each
+  task now fits its own `clone(self.model, safe=False)`, so parallel results are
+  numerically identical to serial. The custom-model path is supported via the
+  deep-copy fallback of `clone(safe=False)`.
+- `AlgModelFinder.fit` now guards `features_to_fit` with `is None` instead of
+  truthiness, so passing a pandas `Index`/NumPy array (e.g. `df.columns`) no longer
+  raises "ambiguous truth value" and an empty list fits nothing instead of everything.
+
+### Added
+- `tests/test_parallel.py`: regression suite pinning the parallel == serial contract
+  (incl. intermittent-race detection and a non-vacuous regression guard).
+
 ## [v0.3.0] - 2026-06-23
 ### Fixed
 - **Python 3.13+ compatibility (PEP 667).** `get_refined_lib` and
