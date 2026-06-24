@@ -19,10 +19,10 @@ sparse-optimization framework — the **SODAs** algorithm.
 
 ## ✨ Why DaeFinder?
 
-Real systems — chemical reaction networks, power grids, mechanical systems —
+Various real-world systems like chemical reaction networks, power grids, mechanical systems etc 
 are governed by a mix of **differential** equations (how things change in time)
 and **algebraic** constraints (relationships that always hold). DaeFinder
-automatically untangles both directly from time-series data:
+automatically discovers and untangles both directly from time-series data:
 
 - 🧩 **Decouples algebraic & dynamic relations** — finds the constraints *and* the ODEs.
 - 🪶 **Model-agnostic by design** — plug in any estimator that implements `fit()` and `score()` (linear models, regularized regressors, or your own custom optimizer).
