@@ -3,6 +3,7 @@ import itertools
 from sklearn.preprocessing import PolynomialFeatures
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.base import MultiOutputMixin, RegressorMixin
+from sklearn.base import clone
 from sklearn import linear_model
 from sklearn.preprocessing import StandardScaler
 from sklearn.utils.validation import (
@@ -831,10 +832,20 @@ prebuilt. Option to pass custom metric object. Can be extended to include other 
         X_features = X_scaled_[possible_library_terms]
         y_target = X_scaled_[feature_]
 
-        self.model.fit(X=X_features, y=y_target)
-        coefficients = dict(zip(self.model.feature_names_in_, self.model.coef_))
-        intercept = self.model.intercept_
-        score = self.model.score(X_features, y_target)
+        # Each call fits its OWN estimator instead of the shared ``self.model``.
+        # When fitting is parallelised (joblib with require='sharedmem' uses the
+        # threading backend), every task would otherwise mutate the same estimator
+        # object concurrently -- a data race that scrambles feature_names_in_/coef_
+        # across tasks and raises "feature names should match" errors. Cloning gives
+        # each task an independent, unfitted estimator with identical parameters.
+        # safe=False falls back to a deep copy for custom (non-sklearn) models; such a
+        # custom_model_ob should therefore be passed UNFITTED (its .fit() must fully
+        # (re)initialise state, as the deep copy carries whatever state the template holds).
+        model = clone(self.model, safe=False)
+        model.fit(X=X_features, y=y_target)
+        coefficients = dict(zip(model.feature_names_in_, model.coef_))
+        intercept = model.intercept_
+        score = model.score(X_features, y_target)
         return coefficients, intercept, score
 
     def fit(self,
@@ -878,7 +889,10 @@ prebuilt. Option to pass custom metric object. Can be extended to include other 
                 self.column_scales['1'] = 1
         else:
             X_scaled = X
-        if not features_to_fit:
+        # ``is None`` rather than truthiness: a pandas Index / numpy array (e.g. passing
+        # ``df.columns`` or a sliced Index) has an ambiguous truth value and would raise;
+        # truthiness would also silently treat an empty list as "fit everything".
+        if features_to_fit is None:
             features_to_fit = X_scaled.columns
 
 

@@ -73,6 +73,7 @@ CI runs the suite on Python 3.9–3.14 (`.github/workflows/tests.yml`).
 | `test_preprocessing.py` | Name helpers, `der_matrix_calculator`, `smooth_data` (spline + Savitzky–Golay), `add_noise_to_df`, `remove_paranth_from_feat`, `poly_to_scipy`. |
 | `test_library.py` | `PolyFeatureMatrix`, `FeatureCouplingTransformer`, `get_factor_feat`, `get_refined_lib` / `get_refined_lib_stable`. |
 | `test_model_discovery.py` | `AlgModelFinder` (recovery, scaling, predict, compare, library map, intercepts), `sequentialThLin`, `stols`, `compare_models_`. |
+| `test_parallel.py` | `AlgModelFinder.fit(parallelize=True)`: the **parallel == serial** contract across models/scaling/custom estimators/library maps, intermittent-race detection (repeated wide-library fits), a non-vacuous regression guard, and `features_to_fit` input-type handling. |
 | `test_equations.py` | `get_simplified_equation`(`_list`), `sympy_symb_to_feature_name`, `construct_reduced_fit_list`. |
 | `test_py314_compat.py` | Python 3.13+/NumPy 2/pandas 3/scikit-learn 1.9 compatibility, with equivalence tests proving the fixed code matches the original. |
 
