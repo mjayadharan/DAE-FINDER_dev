@@ -1,11 +1,27 @@
-# Include essential files
+# Source distribution contents.
+#
+# Ship the package, its tests, and the essential project metadata. Example
+# notebooks, datasets, media, build artifacts, and reports live in the GitHub
+# repository and are deliberately kept OUT of the PyPI source distribution.
+
 include setup.py
+include pyproject.toml
 include LICENSE
 include README.md
-include pyproject.toml
+include CHANGELOG.md
 
-# Include all files in these directories
 recursive-include daeFinder *
-recursive-include Examples *
+recursive-include tests *.py *.md *.sh *.txt
 
+# Keep heavy / non-package material out of the sdist.
+prune Examples
+prune dist
+prune build
+prune docs
+prune parameters
+prune Templates
 
+global-exclude *.py[cod]
+global-exclude __pycache__/*
+global-exclude *.DS_Store
+global-exclude *.ipynb

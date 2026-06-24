@@ -7,3 +7,5 @@ tests/reports/
 .pytest_cache/
 *.egg-info/
 .coverage
+dist/
+build/
